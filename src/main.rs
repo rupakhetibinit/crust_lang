@@ -1,14 +1,11 @@
 use std::{
-    any::Any,
-    env,
-    fmt::{format, Error},
-    fs,
+    env, fs,
     io::{self, Write},
     process,
 };
 
 struct Lox {
-    hasError: bool,
+    has_error: bool,
 }
 
 struct Scanner {
@@ -36,7 +33,7 @@ impl Scanner {
         }
 
         self.tokens.push(Token {
-            token_type: TokenType::EOF,
+            token_type: TokenType::Eof,
             lexeme: "".to_string(),
             literal: None,
             line: self.line,
@@ -50,17 +47,25 @@ impl Scanner {
     }
 
     fn scan_token(&mut self) {
-        let (_, c) = self.advance().unwrap();
-        match c.to_string().as_str() {
-            "(" => self.add_token(TokenType::LEFT_PAREN),
-            ")" => self.add_token(TokenType::RIGHT_PAREN),
-            _ => {}
+        if let Some(c) = self.advance() {
+            match c.to_string().as_str() {
+                "(" => self.add_token(TokenType::LeftParen),
+                ")" => self.add_token(TokenType::RightParen),
+                "{" => self.add_token(TokenType::LeftBrace),
+                "}" => self.add_token(TokenType::RightBrace),
+                _ => {}
+            }
         }
     }
 
-    fn advance(&mut self) -> Option<(usize, char)> {
+    fn advance(&mut self) -> Option<char> {
         self.current += 1;
-        self.source.char_indices().nth(self.current)
+        if self.current < self.source.len() {
+            let ch = self.source.chars().by_ref().nth(self.current);
+            ch
+        } else {
+            None
+        }
     }
 
     fn add_token(&mut self, token_type: TokenType) {
@@ -68,20 +73,15 @@ impl Scanner {
     }
 
     fn add_token_internal(&mut self, token_type: TokenType, literal: Option<String>) {
-        let (source, text) = self.source.split_at(self.current);
-        println!("{} {}", source, text);
-        self.tokens.push(Token::new(
-            token_type,
-            source.to_string(),
-            literal,
-            self.line,
-        ))
+        let text = self.source.chars().nth(self.current).unwrap();
+        self.tokens
+            .push(Token::new(token_type, text.to_string(), literal, self.line))
     }
 }
 
 impl Lox {
     fn new() -> Self {
-        Lox { hasError: false }
+        Lox { has_error: false }
     }
 
     pub fn run_file(&mut self, path: &str) {
@@ -122,7 +122,7 @@ impl Lox {
             println!("{:?}", input.trim());
             self.run(&input);
             input.clear();
-            self.hasError = false
+            self.has_error = false
         }
     }
 }
@@ -138,7 +138,7 @@ fn main() {
             process::exit(64);
         }
     }
-    dbg!(args);
+    // dbg!(args);
 }
 
 #[derive(Debug)]
@@ -172,50 +172,50 @@ impl Token {
 #[derive(Debug)]
 enum TokenType {
     // Single-character tokens.
-    LEFT_PAREN,
-    RIGHT_PAREN,
-    LEFT_BRACE,
-    RIGHT_BRACE,
-    COMMA,
-    DOT,
-    MINUS,
-    PLUS,
-    SEMICOLON,
-    SLASH,
-    STAR,
+    LeftParen,
+    RightParen,
+    LeftBrace,
+    RightBrace,
+    Comma,
+    Dot,
+    Minus,
+    Plus,
+    Semicolon,
+    Slash,
+    Star,
 
     // One or two character tokens.
-    BANG,
-    BANG_EQUAL,
-    EQUAL,
-    EQUAL_EQUAL,
-    GREATER,
-    GREATER_EQUAL,
-    LESS,
-    LESS_EQUAL,
+    Band,
+    BangEqual,
+    Equal,
+    EqualEqual,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
 
     // Literals.
-    IDENTIFIER,
-    STRING,
-    NUMBER,
+    Identifier,
+    String,
+    Number,
 
     // Keywords.
-    AND,
-    CLASS,
-    ELSE,
-    FALSE,
-    FUN,
-    FOR,
-    IF,
-    NIL,
-    OR,
-    PRINT,
-    RETURN,
-    SUPER,
-    THIS,
-    TRUE,
-    VAR,
-    WHILE,
+    And,
+    Class,
+    Else,
+    False,
+    Fun,
+    For,
+    If,
+    Nil,
+    Or,
+    Print,
+    Return,
+    Super,
+    This,
+    True,
+    Var,
+    While,
 
-    EOF,
+    Eof,
 }
