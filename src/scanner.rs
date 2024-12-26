@@ -1,7 +1,4 @@
-use crate::{
-    lox::{error, Lox},
-    token::*,
-};
+use crate::{lox::error, token::*};
 
 #[derive(Debug, Default)]
 pub struct Scanner {
@@ -56,44 +53,46 @@ impl Scanner {
                 '+' => self.add_token(TokenType::Plus),
                 ';' => self.add_token(TokenType::Semicolon),
                 '*' => self.add_token(TokenType::Star),
-                '!' => {
-                    let token_type = if self.match_token('=') {
-                        TokenType::BangEqual
-                    } else {
-                        TokenType::Bang
-                    };
-                    self.add_token_internal(token_type, Some("!=".to_owned()));
-                }
-                '=' => {
-                    let token_type = if self.match_token('=') {
-                        TokenType::EqualEqual
-                    } else {
-                        TokenType::Equal
-                    };
-                    self.add_token_internal(token_type, Some("==".to_owned()));
-                }
-                '<' => {
-                    let token_type = if self.match_token('=') {
-                        TokenType::LessEqual
-                    } else {
-                        TokenType::Less
-                    };
-                    self.add_token_internal(token_type, Some("<=".to_owned()));
-                }
-                '>' => {
-                    let token_type = if self.match_token('=') {
-                        TokenType::GreaterEqual
-                    } else {
-                        TokenType::Greater
-                    };
-                    self.add_token_internal(token_type, Some("<=".to_owned()));
-                }
+                '!' => self.match_and_add_token(
+                    '=',
+                    (TokenType::EqualEqual, "=="),
+                    (TokenType::BangEqual, "!="),
+                ),
+                '=' => self.match_and_add_token(
+                    '=',
+                    (TokenType::EqualEqual, "=="),
+                    (TokenType::Equal, "!="),
+                ),
+                '<' => self.match_and_add_token(
+                    '=',
+                    (TokenType::LessEqual, "<="),
+                    (TokenType::Less, "<"),
+                ),
+                '>' => self.match_and_add_token(
+                    '=',
+                    (TokenType::GreaterEqual, ">="),
+                    (TokenType::Greater, ">"),
+                ),
                 '\n' => self.line += 1,
                 _ => {
                     error(self.line, "Unexpected Character");
                 }
             }
         }
+    }
+
+    pub fn match_and_add_token(
+        &mut self,
+        char_to_match: char,
+        true_case: (TokenType, &str),
+        false_case: (TokenType, &str),
+    ) {
+        let token_type = if self.match_token(char_to_match) {
+            true_case
+        } else {
+            false_case
+        };
+        self.add_token_internal(token_type.0, Some(token_type.1.to_owned()));
     }
 
     pub fn match_token(&mut self, expected: char) -> bool {
@@ -109,7 +108,7 @@ impl Scanner {
             return false;
         }
         self.current += 1;
-        return true;
+        true
     }
 
     pub fn advance(&mut self) -> Option<char> {
