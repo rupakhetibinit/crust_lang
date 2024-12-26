@@ -57,5 +57,5 @@ pub fn error(line: usize, message: &str) {
 }
 
 pub fn report(line: usize, r#where: String, message: &str) {
-    eprintln!("[line {} Error {} : {}", line, r#where, message);
+    println!("[line {} Error {} : {}", line, r#where, message);
 }

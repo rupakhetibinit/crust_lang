@@ -36,7 +36,7 @@ impl Scanner {
         self.tokens
     }
 
-    pub fn is_at_end(&mut self) -> bool {
+    pub fn is_at_end(&self) -> bool {
         self.current >= self.source.len()
     }
 
@@ -55,8 +55,8 @@ impl Scanner {
                 '*' => self.add_token(TokenType::Star),
                 '!' => self.match_and_add_token(
                     '=',
-                    (TokenType::EqualEqual, "=="),
                     (TokenType::BangEqual, "!="),
+                    (TokenType::Bang, "!"),
                 ),
                 '=' => self.match_and_add_token(
                     '=',
@@ -73,12 +73,88 @@ impl Scanner {
                     (TokenType::GreaterEqual, ">="),
                     (TokenType::Greater, ">"),
                 ),
+                '/' => {
+                    if self.match_token('/') {
+                        while (self.peek() != '\n') && !self.is_at_end() {
+                            self.advance();
+                        }
+                    } else {
+                        self.add_token(TokenType::Slash);
+                    }
+                }
                 '\n' => self.line += 1,
+                '\r' | '\t' | ' ' => {}
+                '"' => self.match_string(),
                 _ => {
-                    error(self.line, "Unexpected Character");
+                    if c.is_ascii_digit() {
+                        self.match_number();
+                    } else {
+                        error(self.line, "Unexpected Character");
+                    }
                 }
             }
         }
+    }
+
+    pub fn match_number(&mut self) {
+        while self.peek().is_ascii_digit() {
+            self.advance();
+        }
+
+        if self.peek() == '.' && self.peek_next().is_ascii_digit() {
+            self.advance();
+            while self.peek().is_ascii_digit() {
+                self.advance();
+            }
+        }
+
+        self.add_token_internal(
+            TokenType::Number,
+            Some(
+                self.source
+                    .get(self.start..self.current)
+                    .unwrap()
+                    .to_string(),
+            ),
+        );
+    }
+
+    pub fn peek_next(&self) -> char {
+        if self.current + 1 > self.source.len() {
+            return '\0';
+        }
+        self.source.chars().nth(self.current + 1).unwrap()
+    }
+
+    pub fn match_string(&mut self) {
+        while self.peek() != '"' && !self.is_at_end() {
+            if self.peek() == '\n' {
+                self.line += 1;
+            }
+            self.advance();
+        }
+
+        if self.is_at_end() {
+            error(self.line, "Unterminated string");
+        }
+
+        self.advance();
+
+        let value: Option<String> = Some(
+            self.source
+                .get(self.start + 1..self.current - 1)
+                .unwrap()
+                .to_string(),
+        );
+
+        self.add_token_internal(TokenType::String, value);
+    }
+
+    pub fn peek(&self) -> char {
+        if self.is_at_end() {
+            return '\0';
+        }
+        self.source.chars().nth(self.current).unwrap()
     }
 
     pub fn match_and_add_token(

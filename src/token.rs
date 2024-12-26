@@ -27,8 +27,8 @@ impl Token {
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!(
-            "Type: {:?} Lexeme: {} Literal: {:?}",
-            self.token_type, self.lexeme, self.literal,
+            "Line: {:?} Type: {:?} Lexeme: {} Literal: {:?}",
+            self.line, self.token_type, self.lexeme, self.literal,
         ))
     }
 }
