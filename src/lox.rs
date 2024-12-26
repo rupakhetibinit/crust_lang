@@ -12,12 +12,12 @@ impl Lox {
         Lox {}
     }
 
-    pub fn run_file(&mut self, path: &str) {
+    pub fn run_file(&self, path: &str) {
         let content = fs::read_to_string(path).expect("Couldn't read file");
         self.run(&content)
     }
 
-    pub fn run(&mut self, content: &String) {
+    pub fn run(&self, content: &String) {
         let scanner = Scanner::new(content.to_owned());
 
         let tokens = scanner.scan_tokens();
@@ -27,7 +27,7 @@ impl Lox {
         }
     }
 
-    pub fn run_prompt(&mut self) {
+    pub fn run_prompt(&self) {
         let mut input = String::new();
         loop {
             print!("> ");
@@ -41,7 +41,6 @@ impl Lox {
                 break;
             }
 
-            println!("{:?}", input.trim());
             self.run(&input);
             input.clear();
 
