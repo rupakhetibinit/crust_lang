@@ -27,10 +27,8 @@ impl Token {
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!(
-            "{:?} {} {:?}",
-            self.token_type,
-            self.lexeme,
-            Some(self.literal.clone()),
+            "Type: {:?} Lexeme: {} Literal: {:?}",
+            self.token_type, self.lexeme, self.literal,
         ))
     }
 }
@@ -51,7 +49,7 @@ pub enum TokenType {
     Star,
 
     // One or two character tokens.
-    Band,
+    Bang,
     BangEqual,
     Equal,
     EqualEqual,

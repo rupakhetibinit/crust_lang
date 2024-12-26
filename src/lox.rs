@@ -3,15 +3,13 @@ use std::{
     io::{self, Write},
 };
 
-use crate::scanner::Scanner;
+use crate::{scanner::Scanner, HAD_ERROR};
 
-pub struct Lox {
-    has_error: bool,
-}
+pub struct Lox {}
 
 impl Lox {
     pub fn new() -> Self {
-        Lox { has_error: false }
+        Lox {}
     }
 
     pub fn run_file(&mut self, path: &str) {
@@ -25,16 +23,8 @@ impl Lox {
         let tokens = scanner.scan_tokens();
 
         for token in tokens {
-            println!("{:#?}", token)
+            println!("{}", token)
         }
-    }
-
-    pub fn error(&mut self, line: i32, message: &str) {
-        self.report(line, "".to_string(), message);
-    }
-
-    pub fn report(&mut self, line: i32, r#where: String, message: &str) {
-        eprintln!("[line {} Error {} : {}", line, r#where, message);
     }
 
     pub fn run_prompt(&mut self) {
@@ -54,7 +44,18 @@ impl Lox {
             println!("{:?}", input.trim());
             self.run(&input);
             input.clear();
-            self.has_error = false
+
+            let mut had_error = HAD_ERROR.lock().unwrap();
+
+            *had_error = false;
         }
     }
+}
+
+pub fn error(line: usize, message: &str) {
+    report(line, "".to_string(), message);
+}
+
+pub fn report(line: usize, r#where: String, message: &str) {
+    eprintln!("[line {} Error {} : {}", line, r#where, message);
 }
