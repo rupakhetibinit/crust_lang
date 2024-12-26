@@ -1,4 +1,4 @@
-use crate::{lox::error, token::*};
+use crate::{lox::error, token::*, KEYWORDS};
 
 #[derive(Debug, Default)]
 pub struct Scanner {
@@ -61,7 +61,7 @@ impl Scanner {
                 '=' => self.match_and_add_token(
                     '=',
                     (TokenType::EqualEqual, "=="),
-                    (TokenType::Equal, "!="),
+                    (TokenType::Equal, "="),
                 ),
                 '<' => self.match_and_add_token(
                     '=',
@@ -88,12 +88,34 @@ impl Scanner {
                 _ => {
                     if c.is_ascii_digit() {
                         self.match_number();
+                    } else if c.is_alphabetic() {
+                        self.match_identifier();
                     } else {
                         error(self.line, "Unexpected Character");
                     }
                 }
             }
         }
+    }
+
+    pub fn match_identifier(&mut self) {
+        while self.peek().is_alphanumeric() {
+            self.advance();
+        }
+
+        let text = self
+            .source
+            .get(self.start..self.current)
+            .unwrap()
+            .to_string();
+
+        let token_type = if let Some(token_type) = KEYWORDS.get(text.as_str()) {
+            token_type.clone()
+        } else {
+            TokenType::Identifier
+        };
+
+        self.add_token(token_type);
     }
 
     pub fn match_number(&mut self) {
