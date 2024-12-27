@@ -1,4 +1,5 @@
 // this is a comment
+// comment
 (( )){} // grouping stuff
 !*+-/=<> <= >= == // operators
 "string support"

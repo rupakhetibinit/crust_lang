@@ -1,11 +1,13 @@
-use std::{collections::HashMap, sync::Mutex};
-#[allow(dead_code)]
-use std::{env, process};
+mod expression;
 mod lox;
+mod parser;
 mod scanner;
 mod token;
+
 use lox::Lox;
 use once_cell::sync::Lazy;
+use std::{collections::HashMap, sync::Mutex};
+use std::{env, process};
 use token::TokenType;
 
 pub static HAD_ERROR: Lazy<Mutex<bool>> = Lazy::new(|| Mutex::new(false));
