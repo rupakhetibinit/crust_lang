@@ -235,6 +235,6 @@ mod tests {
 
         let printer = AstPrinter;
 
-        assert_eq!(printer.print(expression).unwrap(), "(* (- 123.45) 56.78)")
+        assert_eq!(printer.print(&expression).unwrap(), "(* (- 123.45) 56.78)")
     }
 }

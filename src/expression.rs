@@ -54,65 +54,37 @@ impl fmt::Display for Object {
     }
 }
 
-pub trait Visitor<R> {
-    fn visit_binary_expr(&self, left: &Expr, operator: &Token, right: &Expr) -> Result<R, Error>;
-    fn visit_grouping_expr(&self, expression: &Expr) -> Result<R, Error>;
-    fn visit_literal_expr(&self, value: &Object) -> Result<R, Error>;
-    fn visit_unary_expr(&self, operator: &Token, right: &Expr) -> Result<R, Error>;
-}
+pub struct AstPrinter;
 
-impl Expr {
-    pub fn accept<R>(&self, visitor: &dyn Visitor<R>) -> Result<R, Error> {
-        match self {
+impl AstPrinter {
+    pub fn print(&self, expr: &Expr) -> Result<String, Error> {
+        match expr {
             Expr::Binary {
                 left,
                 operator,
                 right,
-            } => visitor.visit_binary_expr(left, operator, right),
-            Expr::Literal { value } => visitor.visit_literal_expr(value),
-            Expr::Unary { operator, right } => visitor.visit_unary_expr(operator, right),
-            Expr::Grouping { expr } => visitor.visit_grouping_expr(expr),
+            } => self.parenthesize(&operator.lexeme, &[left, right]),
+            Expr::Literal { value } => Ok(value.to_string()),
+            Expr::Unary { operator, right } => self.parenthesize(&operator.lexeme, &[right]),
+            Expr::Grouping { expr } => self.parenthesize("group", &[expr]),
         }
+    }
+
+    fn parenthesize(&self, name: &str, exprs: &[&Expr]) -> Result<String, Error> {
+        let mut result = String::with_capacity(32);
+        result.push('(');
+        result.push_str(name);
+
+        for expr in exprs {
+            result.push(' ');
+            result.push_str(&self.print(expr)?);
+        }
+
+        result.push(')');
+        Ok(result)
     }
 }
 
-pub struct AstPrinter;
-impl AstPrinter {
-    pub fn print(&self, expr: Expr) -> Result<String, Error> {
-        expr.accept(self)
-    }
-    fn parenthesize(&self, name: String, exprs: Vec<&Expr>) -> Result<String, Error> {
-        let mut r = String::new();
-        r.push('(');
-        r.push_str(&name);
-        for e in &exprs {
-            r.push(' ');
-            r.push_str(&e.accept(self)?);
-        }
-        r.push(')');
-        Ok(r)
-    }
-}
-
-impl Visitor<String> for AstPrinter {
-    fn visit_binary_expr(
-        &self,
-        left: &Expr,
-        operator: &Token,
-        right: &Expr,
-    ) -> Result<String, Error> {
-        self.parenthesize(operator.lexeme.clone(), vec![left, right])
-    }
-    fn visit_grouping_expr(&self, expr: &Expr) -> Result<String, Error> {
-        self.parenthesize("group".to_string(), vec![expr])
-    }
-    fn visit_literal_expr(&self, value: &Object) -> Result<String, Error> {
-        Ok(value.to_string())
-    }
-    fn visit_unary_expr(&self, operator: &Token, right: &Expr) -> Result<String, Error> {
-        self.parenthesize(operator.lexeme.clone(), vec![right])
-    }
-}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -136,7 +108,7 @@ mod tests {
 
         let printer = AstPrinter;
         assert_eq!(
-            printer.print(expression).unwrap(),
+            printer.print(&expression).unwrap(),
             format!("(* (- 123) (group 45.67))")
         );
     }
