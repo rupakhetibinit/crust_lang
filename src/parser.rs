@@ -66,7 +66,9 @@ impl Parser {
     }
 
     fn peek(&self) -> &Token {
-        self.tokens.get(self.current).unwrap()
+        self.tokens
+            .get(self.current)
+            .expect("Peek into the end of token stream")
     }
 
     fn previous(&self) -> Token {
@@ -173,12 +175,12 @@ impl Parser {
         Ok(expr)
     }
 
-    fn consume(&mut self, token_type: TokenType, message: &str) -> Token {
+    fn consume(&mut self, token_type: TokenType, message: &str) -> Result<Token, Error> {
         if self.check(token_type) {
-            return self.advance();
+            return Ok(self.advance());
+        } else {
+            Err(self.error(self.peek(), message))
         }
-        parser_error(self.peek().clone(), message);
-        Token::new(TokenType::Eof, "".to_string(), None, 1)
     }
 
     fn expression(&mut self) -> Result<Expr, Error> {
@@ -188,5 +190,50 @@ impl Parser {
     fn error(&self, token: &Token, message: &str) -> Error {
         parser_error(token.clone(), message);
         Error::Parse
+    }
+
+    fn synchronize(&mut self) {
+        self.advance();
+
+        while !self.is_at_end() {
+            if self.previous().token_type == TokenType::Semicolon {
+                return;
+            }
+
+            match self.peek().token_type {
+                TokenType::Class
+                | TokenType::Fun
+                | TokenType::Var
+                | TokenType::For
+                | TokenType::If
+                | TokenType::Return
+                | TokenType::While => return,
+                _ => {}
+            }
+
+            self.advance();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::expression::AstPrinter;
+    use crate::scanner::Scanner;
+
+    #[test]
+    fn test_parser() {
+        let scanner = Scanner::new("-123.45 * 56.78".to_string());
+
+        let tokens = scanner.scan_tokens();
+
+        let mut parser = Parser::new(tokens);
+
+        let expression = parser.parse().expect("Could not parse sample code");
+
+        let printer = AstPrinter;
+
+        assert_eq!(printer.print(expression), "(* (- 123.45) 56.78)")
     }
 }

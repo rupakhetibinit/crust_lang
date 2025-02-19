@@ -36,11 +36,11 @@ impl Scanner {
         self.tokens
     }
 
-    pub fn is_at_end(&self) -> bool {
+    fn is_at_end(&self) -> bool {
         self.current >= self.source.len()
     }
 
-    pub fn scan_token(&mut self) {
+    fn scan_token(&mut self) {
         if let Some(c) = self.advance() {
             match c {
                 '(' => self.add_token(TokenType::LeftParen),
@@ -98,7 +98,7 @@ impl Scanner {
         }
     }
 
-    pub fn match_identifier(&mut self) {
+    fn match_identifier(&mut self) {
         while self.peek().is_alphanumeric() {
             self.advance();
         }
@@ -118,7 +118,7 @@ impl Scanner {
         self.add_token(token_type);
     }
 
-    pub fn match_number(&mut self) {
+    fn match_number(&mut self) {
         while self.peek().is_ascii_digit() {
             self.advance();
         }
@@ -141,14 +141,14 @@ impl Scanner {
         );
     }
 
-    pub fn peek_next(&self) -> char {
+    fn peek_next(&self) -> char {
         if self.current + 1 > self.source.len() {
             return '\0';
         }
         self.source.chars().nth(self.current + 1).unwrap()
     }
 
-    pub fn match_string(&mut self) {
+    fn match_string(&mut self) {
         while self.peek() != '"' && !self.is_at_end() {
             if self.peek() == '\n' {
                 self.line += 1;
@@ -172,14 +172,14 @@ impl Scanner {
         self.add_token_internal(TokenType::String, value);
     }
 
-    pub fn peek(&self) -> char {
+    fn peek(&self) -> char {
         if self.is_at_end() {
             return '\0';
         }
         self.source.chars().nth(self.current).unwrap()
     }
 
-    pub fn match_and_add_token(
+    fn match_and_add_token(
         &mut self,
         char_to_match: char,
         true_case: (TokenType, &str),
@@ -193,7 +193,7 @@ impl Scanner {
         self.add_token_internal(token_type.0, Some(token_type.1.to_owned()));
     }
 
-    pub fn match_token(&mut self, expected: char) -> bool {
+    fn match_token(&mut self, expected: char) -> bool {
         if self.is_at_end() {
             return false;
         }
@@ -209,7 +209,7 @@ impl Scanner {
         true
     }
 
-    pub fn advance(&mut self) -> Option<char> {
+    fn advance(&mut self) -> Option<char> {
         let result = self.source.chars().by_ref().nth(self.current);
         self.current += 1;
         result
