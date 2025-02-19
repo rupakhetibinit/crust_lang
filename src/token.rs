@@ -33,7 +33,7 @@ impl Display for Token {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,
@@ -60,8 +60,8 @@ pub enum TokenType {
 
     // Literals.
     Identifier,
-    String,
-    Number,
+    String { literal: String },
+    Number { literal: f64 },
 
     // Keywords.
     And,

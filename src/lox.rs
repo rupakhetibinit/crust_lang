@@ -24,10 +24,21 @@ impl Lox {
 
         let mut parser = Parser::new(tokens);
 
-        if let Some(expression) = parser.parse() {
-            let printer = AstPrinter;
-            println!("{}", printer.print(expression));
+        let had_error = HAD_ERROR.lock().unwrap();
+
+        if *had_error == true {
+            return;
+        };
+
+        let expression = parser.parse();
+
+        let printer = AstPrinter;
+
+        if expression.is_none() {
+            return;
         }
+
+        println!("{}", printer.print(expression.unwrap()));
     }
 
     pub fn run_prompt(&self) {

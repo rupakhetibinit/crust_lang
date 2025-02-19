@@ -130,14 +130,18 @@ impl Scanner {
             }
         }
 
+        let literal = self
+            .source
+            .get(self.start..self.current)
+            .unwrap()
+            .parse::<f64>()
+            .unwrap();
+
         self.add_token_internal(
-            TokenType::Number,
-            Some(
-                self.source
-                    .get(self.start..self.current)
-                    .unwrap()
-                    .to_string(),
-            ),
+            TokenType::Number {
+                literal: literal.clone(),
+            },
+            Some(literal.to_string()),
         );
     }
 
@@ -169,7 +173,12 @@ impl Scanner {
                 .to_string(),
         );
 
-        self.add_token_internal(TokenType::String, value);
+        self.add_token_internal(
+            TokenType::String {
+                literal: value.clone().unwrap(),
+            },
+            value,
+        );
     }
 
     fn peek(&self) -> char {

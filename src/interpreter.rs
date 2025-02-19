@@ -1,12 +1,5 @@
 use crate::expression::{Expr, Visitor};
 
-enum Object {
-    Boolean(bool),
-    Null,
-    Number(f64),
-    String(String),
-}
-
 pub struct Interpreter;
 
 impl Interpreter {

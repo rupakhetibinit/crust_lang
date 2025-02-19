@@ -1,3 +1,5 @@
+use core::fmt;
+
 use crate::token::Token;
 
 #[derive(Debug)]
@@ -8,7 +10,7 @@ pub enum Expr {
         right: Box<Expr>,
     },
     Literal {
-        value: Option<String>,
+        value: Object,
     },
     Unary {
         operator: Token,
@@ -17,6 +19,25 @@ pub enum Expr {
     Grouping {
         expr: Box<Expr>,
     },
+}
+
+#[derive(Debug)]
+pub enum Object {
+    Boolean(bool),
+    Null,
+    Number(f64),
+    String(String),
+}
+
+impl fmt::Display for Object {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Object::Boolean(b) => write!(f, "{}", b),
+            Object::Null => write!(f, "null"),
+            Object::Number(n) => write!(f, "{}", n),
+            Object::String(s) => write!(f, "{}", s),
+        }
+    }
 }
 
 pub trait Visitor<R> {
@@ -34,7 +55,7 @@ impl Expr {
                 operator,
                 right,
             } => visitor.visit_binary_expr(left, operator, right),
-            Expr::Literal { value } => visitor.visit_literal_expr(value.clone().unwrap()),
+            Expr::Literal { value } => visitor.visit_literal_expr(value.to_string()),
             Expr::Unary { operator, right } => visitor.visit_unary_expr(operator, right),
             Expr::Grouping { expr } => visitor.visit_grouping_expr(expr),
         }
@@ -83,13 +104,13 @@ mod tests {
             left: Box::new(Expr::Unary {
                 operator: Token::new(TokenType::Minus, "-".to_string(), Some("-".to_string()), 1),
                 right: Box::new(Expr::Literal {
-                    value: Some("123".to_string()),
+                    value: Object::Number(123f64),
                 }),
             }),
             operator: Token::new(TokenType::Star, "*".to_string(), Some("*".to_string()), 1),
             right: Box::new(Expr::Grouping {
                 expr: Box::new(Expr::Literal {
-                    value: Some("45.67".to_string()),
+                    value: Object::Number(45.67),
                 }),
             }),
         };

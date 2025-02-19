@@ -1,6 +1,6 @@
 use crate::{
     error::{parser_error, Error},
-    expression::Expr,
+    expression::{Expr, Object},
     token::{Token, TokenType},
 };
 
@@ -142,35 +142,35 @@ impl Parser {
     }
 
     fn primary(&mut self) -> Result<Expr, Error> {
-        let expr = if matches!(self, TokenType::False) {
-            Expr::Literal {
-                value: Some("false".to_string()),
+        let expr = match self.peek().clone().token_type {
+            TokenType::False => Expr::Literal {
+                value: Object::Boolean(false),
+            },
+            TokenType::True => Expr::Literal {
+                value: Object::Boolean(true),
+            },
+            TokenType::Nil => Expr::Literal {
+                value: Object::Null,
+            },
+            TokenType::String { literal } => Expr::Literal {
+                value: Object::String(literal),
+            },
+            TokenType::Number { literal } => Expr::Literal {
+                value: Object::Number(literal),
+            },
+            TokenType::LeftParen => {
+                let expr = self.expression()?;
+
+                self.consume(TokenType::RightParen, "Expected ')' after expression.")?;
+
+                Expr::Grouping {
+                    expr: Box::new(expr),
+                }
             }
-        } else if matches!(self, TokenType::True) {
-            Expr::Literal {
-                value: Some("true".to_string()),
-            }
-        } else if matches!(self, TokenType::Nil) {
-            Expr::Literal {
-                value: Some("null".to_string()),
-            }
-        } else if matches!(self, TokenType::Number) {
-            Expr::Literal {
-                value: self.previous().literal,
-            }
-        } else if matches!(self, TokenType::String) {
-            Expr::Literal {
-                value: self.previous().literal,
-            }
-        } else if matches!(self, TokenType::LeftParen) {
-            let expr = self.expression()?;
-            self.consume(TokenType::RightParen, "Expect ')' after expression.");
-            Expr::Grouping {
-                expr: Box::new(expr),
-            }
-        } else {
-            return Err(self.error(self.peek(), "Expect expression."));
+            _ => return Err(self.error(self.peek(), "Expected expression")),
         };
+
+        self.advance();
 
         Ok(expr)
     }
