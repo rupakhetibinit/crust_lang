@@ -3,7 +3,9 @@ use std::{
     io::{self, Write},
 };
 
-use crate::{expression::AstPrinter, parser::Parser, scanner::Scanner, HAD_ERROR};
+use crate::{
+    expression::AstPrinter, interpreter::Interpreter, parser::Parser, scanner::Scanner, HAD_ERROR,
+};
 
 pub struct Lox {}
 
@@ -33,12 +35,15 @@ impl Lox {
         let expression = parser.parse();
 
         let printer = AstPrinter;
+        let interpreter = Interpreter;
 
         if expression.is_none() {
             return;
         }
 
-        println!("{}", printer.print(expression.unwrap()));
+        // println!("{}", printer.print(expression.clone().unwrap()).unwrap());
+
+        println!("{:?}", interpreter.evaluate(&expression.unwrap()));
     }
 
     pub fn run_prompt(&self) {
