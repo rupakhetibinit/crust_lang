@@ -159,6 +159,7 @@ impl Parser {
                 value: Object::Number(literal),
             },
             TokenType::LeftParen => {
+                self.advance();
                 let expr = self.expression()?;
 
                 self.consume(TokenType::RightParen, "Expected ')' after expression.")?;

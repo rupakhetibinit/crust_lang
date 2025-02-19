@@ -41,7 +41,7 @@ impl Lox {
             return;
         }
 
-        // println!("{}", printer.print(expression.clone().unwrap()).unwrap());
+        println!("{}", printer.print(expression.clone().unwrap()).unwrap());
 
         println!("{:?}", interpreter.evaluate(&expression.unwrap()));
     }
