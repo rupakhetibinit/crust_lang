@@ -1,43 +1,69 @@
-use crate::{lox::error, token::*, KEYWORDS};
+use codespan::{FileId, Files};
+use codespan_reporting::{
+    diagnostic::{Diagnostic, Label},
+    term::{
+        self,
+        termcolor::{ColorChoice, StandardStream},
+    },
+};
 
-#[derive(Debug, Default)]
+use crate::{expression::Object, token::*, KEYWORDS};
+
+#[derive(Debug)]
 pub struct Scanner {
-    source: String,
+    chars: Vec<(usize, char)>, // (byte_offset, char)
+    current: usize,
+    start: usize,
     tokens: Vec<Token>,
     line: usize,
-    start: usize,
-    current: usize,
+    files: Files<String>,
+    file_id: FileId,
+    source: String,
 }
 
 impl Scanner {
     pub fn new(source: String) -> Self {
+        let mut files = Files::new();
+        let file_id = files.add("source", source.clone());
+
+        let chars: Vec<(usize, char)> = source.char_indices().collect();
         Scanner {
-            source,
+            chars,
+            current: 0,
+            start: 0,
             tokens: Vec::new(),
             line: 1,
-            start: 0,
-            current: 0,
+            files,
+            file_id,
+            source,
         }
     }
 
-    pub fn scan_tokens(mut self) -> Vec<Token> {
+    pub fn scan_tokens(mut self) -> (String, Vec<Token>) {
         while !self.is_at_end() {
             self.start = self.current;
             self.scan_token();
         }
+
+        let eof_span = if !self.source.is_empty() {
+            (self.source.len(), self.source.len())
+        } else {
+            (0, 0)
+        };
 
         self.tokens.push(Token {
             token_type: TokenType::Eof,
             lexeme: "".to_string(),
             literal: None,
             line: self.line,
+            span: eof_span,
         });
 
-        self.tokens
+        (self.source, self.tokens)
     }
 
     fn is_at_end(&self) -> bool {
-        self.current >= self.source.len()
+        self.current >= self.chars.len()
     }
 
     fn scan_token(&mut self) {
@@ -75,7 +101,9 @@ impl Scanner {
                 ),
                 '/' => {
                     if self.match_token('/') {
-                        while (self.peek() != '\n') && !self.is_at_end() {
+                        while (self.peek().is_some() && self.peek().unwrap() != '\n')
+                            && !self.is_at_end()
+                        {
                             self.advance();
                         }
                     } else {
@@ -91,7 +119,7 @@ impl Scanner {
                     } else if c.is_alphabetic() {
                         self.match_identifier();
                     } else {
-                        error(self.line, "Unexpected Character");
+                        self.error("Unexpected character");
                     }
                 }
             }
@@ -99,93 +127,120 @@ impl Scanner {
     }
 
     fn match_identifier(&mut self) {
-        while self.peek().is_alphanumeric() {
-            self.advance();
+        // Process alphanumeric characters
+        while let Some(c) = self.peek() {
+            if c.is_alphanumeric() {
+                self.advance();
+            } else {
+                break;
+            }
         }
 
-        let text = self
-            .source
-            .get(self.start..self.current)
-            .unwrap()
-            .to_string();
-
-        let token_type = if let Some(token_type) = KEYWORDS.get(text.as_str()) {
-            token_type.clone()
+        // Calculate byte spans using original char indices
+        let start_byte = self.chars[self.start].0;
+        let end_byte = if self.current < self.chars.len() {
+            self.chars[self.current].0
         } else {
-            TokenType::Identifier
+            self.source.len()
         };
 
-        self.add_token(token_type);
+        // Extract identifier text using byte offsets
+        let text = self.source[start_byte..end_byte].to_string();
+
+        // Determine token type
+        let token_type = KEYWORDS
+            .get(&text[..])
+            .cloned()
+            .unwrap_or(TokenType::Identifier);
+
+        // Add token with proper span information
+        self.add_token_internal(token_type, Some(text));
     }
 
     fn match_number(&mut self) {
-        while self.peek().is_ascii_digit() {
-            self.advance();
-        }
-
-        if self.peek() == '.' && self.peek_next().is_ascii_digit() {
-            self.advance();
-            while self.peek().is_ascii_digit() {
+        // Process integer part
+        while let Some(c) = self.peek() {
+            if c.is_ascii_digit() {
                 self.advance();
+            } else {
+                break;
             }
         }
 
-        let literal = self
-            .source
-            .get(self.start..self.current)
-            .unwrap()
-            .parse::<f64>()
-            .unwrap();
+        // Look for decimal point with fractional part
+        let has_fraction = if self.peek() == Some('.') {
+            // Check if next character is a digit
+            if self.peek_next().map_or(false, |c| c.is_ascii_digit()) {
+                self.advance(); // Consume the '.'
 
-        self.add_token_internal(
-            TokenType::Number {
-                literal: literal.clone(),
-            },
-            Some(literal.to_string()),
-        );
-    }
+                // Process fractional part
+                while let Some(c) = self.peek() {
+                    if c.is_ascii_digit() {
+                        self.advance();
+                    } else {
+                        break;
+                    }
+                }
+                true
+            } else {
+                // Report error if decimal is not followed by digit
+                self.error("Invalid decimal number");
+                false
+            }
+        } else {
+            false
+        };
 
-    fn peek_next(&self) -> char {
-        if self.current + 1 > self.source.len() {
-            return '\0';
-        }
-        self.source.chars().nth(self.current + 1).unwrap()
+        // Calculate span using original char indices
+        let start_byte = self.chars[self.start].0;
+        let end_byte = self.chars[self.current - 1].0 + 1; // +1 to include last char
+
+        // Extract numeric literal
+        let number_str = &self.source[start_byte..end_byte];
+        let literal = number_str.parse::<f64>().unwrap_or_else(|_| {
+            self.error("Invalid numeric literal");
+            0.0 // Default value, error already reported
+        });
+
+        self.add_token_internal(TokenType::Number { literal }, Some(literal.to_string()));
     }
 
     fn match_string(&mut self) {
-        while self.peek() != '"' && !self.is_at_end() {
-            if self.peek() == '\n' {
-                self.line += 1;
+        let start_line = self.line;
+        let string_start = self.chars[self.start].0;
+
+        while let Some((_, c)) = self.chars.get(self.current) {
+            match c {
+                '"' => break,
+                '\n' => self.line += 1,
+                _ => {}
             }
-            self.advance();
+            self.current += 1;
         }
 
         if self.is_at_end() {
-            error(self.line, "Unterminated string");
+            self.report_error(
+                "Unterminated string",
+                string_start,
+                self.source.len(),
+                start_line,
+            );
+            return;
         }
 
-        self.advance();
+        // Consume the closing quote
+        self.current += 1;
 
-        let value: Option<String> = Some(
-            self.source
-                .get(self.start + 1..self.current - 1)
-                .unwrap()
-                .to_string(),
-        );
+        let start_byte = string_start + 1; // Skip opening quote
+        let end_byte = self.chars[self.current - 1].0; // Before closing quote
+        let value = self.source[start_byte..end_byte].to_string();
 
         self.add_token_internal(
             TokenType::String {
-                literal: value.clone().unwrap(),
+                literal: value.clone(),
             },
-            value,
+            Some(value),
         );
-    }
-
-    fn peek(&self) -> char {
-        if self.is_at_end() {
-            return '\0';
-        }
-        self.source.chars().nth(self.current).unwrap()
     }
 
     fn match_and_add_token(
@@ -218,20 +273,69 @@ impl Scanner {
         true
     }
 
-    fn advance(&mut self) -> Option<char> {
-        let result = self.source.chars().by_ref().nth(self.current);
-        self.current += 1;
-        result
-    }
-
     fn add_token(&mut self, token_type: TokenType) {
         self.add_token_internal(token_type, None)
     }
 
     fn add_token_internal(&mut self, token_type: TokenType, literal: Option<String>) {
-        if let Some(text) = self.source.chars().nth(self.current - 1) {
-            self.tokens
-                .push(Token::new(token_type, text.to_string(), literal, self.line))
+        let start_byte = self.chars[self.start].0;
+        let end_byte = if self.current < self.chars.len() {
+            self.chars[self.current].0
+        } else {
+            self.source.len()
+        };
+
+        let lexeme = self.source[start_byte..end_byte].to_string();
+
+        self.tokens.push(Token::new(
+            token_type,
+            lexeme,
+            literal,
+            self.line,
+            (self.start, self.current),
+        ));
+    }
+
+    fn report_error(&self, message: &str, start: usize, end: usize, line: usize) {
+        let writer = StandardStream::stderr(ColorChoice::Always);
+        let config = term::Config::default();
+
+        let diagnostic = Diagnostic::error()
+            .with_message(message)
+            .with_labels(vec![Label::primary(self.file_id, start..end)
+                .with_message(format!("[line {}] {}", line, message))]);
+
+        term::emit(&mut writer.lock(), &config, &self.files, &diagnostic)
+            .expect("Failed to emit diagnostic");
+    }
+
+    // Updated error handling
+    fn error(&mut self, message: &str) {
+        let start = self.chars[self.start].0;
+        let end = if self.current < self.chars.len() {
+            self.chars[self.current].0
+        } else {
+            self.source.len()
+        };
+        self.report_error(message, start, end, self.line);
+    }
+
+    // Updated advance and peek methods
+    fn advance(&mut self) -> Option<char> {
+        if self.current < self.chars.len() {
+            let c = self.chars[self.current].1;
+            self.current += 1;
+            Some(c)
+        } else {
+            None
         }
+    }
+
+    fn peek(&self) -> Option<char> {
+        self.chars.get(self.current).map(|(_, c)| *c)
+    }
+
+    fn peek_next(&self) -> Option<char> {
+        self.chars.get(self.current + 1).map(|(_, c)| *c)
     }
 }

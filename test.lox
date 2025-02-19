@@ -1,6 +1,6 @@
 // this is a comment
 // comment
-(( )){} // grouping stuff
+(( 1 + 2 )) // grouping stuff
 !*+-/=<> <= >= == // operators
 "string support"
 "unterminated string"

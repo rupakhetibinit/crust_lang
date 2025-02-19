@@ -6,6 +6,7 @@ pub struct Token {
     pub lexeme: String,
     pub literal: Option<String>,
     pub line: usize,
+    pub span: (usize, usize), // (start_byte, end_byte)
 }
 
 impl Token {
@@ -14,12 +15,14 @@ impl Token {
         lexeme: String,
         literal: Option<String>,
         line: usize,
+        span: (usize, usize),
     ) -> Self {
         Token {
             token_type,
             lexeme,
             literal,
             line,
+            span,
         }
     }
 }

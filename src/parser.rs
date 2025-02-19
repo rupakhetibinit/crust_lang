@@ -1,3 +1,12 @@
+use codespan::{FileId, Files};
+use codespan_reporting::{
+    diagnostic::{Diagnostic, Label},
+    term::{
+        self,
+        termcolor::{ColorChoice, StandardStream},
+    },
+};
+
 use crate::{
     error::{parser_error, Error},
     expression::{Expr, Object},
@@ -21,11 +30,23 @@ macro_rules! matches {
 pub struct Parser {
     tokens: Vec<Token>,
     current: usize,
+    files: Files<String>,
+    file_id: FileId,
+    source: String,
 }
 
 impl Parser {
-    pub fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, current: 0 }
+    pub fn new(source: String, tokens: Vec<Token>) -> Self {
+        let mut files = Files::new();
+        let file_id = files.add("source", source.clone());
+
+        Parser {
+            tokens,
+            current: 0,
+            files,
+            file_id,
+            source,
+        }
     }
     pub fn parse(&mut self) -> Option<Expr> {
         self.expression().ok()
@@ -178,9 +199,10 @@ impl Parser {
 
     fn consume(&mut self, token_type: TokenType, message: &str) -> Result<Token, Error> {
         if self.check(token_type) {
-            return Ok(self.advance());
+            Ok(self.advance())
         } else {
-            Err(self.error(self.peek(), message))
+            let token = self.peek().clone();
+            Err(self.error(&token, message))
         }
     }
 
@@ -189,7 +211,21 @@ impl Parser {
     }
 
     fn error(&self, token: &Token, message: &str) -> Error {
-        parser_error(token.clone(), message);
+        let writer = StandardStream::stderr(ColorChoice::Always);
+        let config = term::Config::default();
+
+        let diagnostic =
+            Diagnostic::error()
+                .with_message(message)
+                .with_labels(vec![Label::primary(
+                    self.file_id,
+                    token.span.0..token.span.1,
+                )
+                .with_message(message)]);
+
+        term::emit(&mut writer.lock(), &config, &self.files, &diagnostic)
+            .expect("Failed to emit diagnostic");
+
         Error::Parse
     }
 
@@ -227,9 +263,9 @@ mod tests {
     fn test_parser() {
         let scanner = Scanner::new("-123.45 * 56.78".to_string());
 
-        let tokens = scanner.scan_tokens();
+        let (source, tokens) = scanner.scan_tokens();
 
-        let mut parser = Parser::new(tokens);
+        let mut parser = Parser::new(source, tokens);
 
         let expression = parser.parse().expect("Could not parse sample code");
 

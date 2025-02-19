@@ -93,12 +93,24 @@ mod tests {
     fn test_printer() {
         let expression = Expr::Binary {
             left: Box::new(Expr::Unary {
-                operator: Token::new(TokenType::Minus, "-".to_string(), Some("-".to_string()), 1),
+                operator: Token::new(
+                    TokenType::Minus,
+                    "-".to_string(),
+                    Some("-".to_string()),
+                    1,
+                    (1, 1),
+                ),
                 right: Box::new(Expr::Literal {
                     value: Object::Number(123f64),
                 }),
             }),
-            operator: Token::new(TokenType::Star, "*".to_string(), Some("*".to_string()), 1),
+            operator: Token::new(
+                TokenType::Star,
+                "*".to_string(),
+                Some("*".to_string()),
+                1,
+                (1, 1),
+            ),
             right: Box::new(Expr::Grouping {
                 expr: Box::new(Expr::Literal {
                     value: Object::Number(45.67),

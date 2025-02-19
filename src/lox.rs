@@ -22,9 +22,9 @@ impl Lox {
     pub fn run(&self, content: &String) {
         let scanner = Scanner::new(content.to_owned());
 
-        let tokens = scanner.scan_tokens();
+        let (source, tokens) = scanner.scan_tokens();
 
-        let mut parser = Parser::new(tokens);
+        let mut parser = Parser::new(source, tokens);
 
         let had_error = HAD_ERROR.lock().unwrap();
 
