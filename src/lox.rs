@@ -26,7 +26,7 @@ impl Lox {
 
         if let Some(expression) = parser.parse() {
             let printer = AstPrinter;
-            printer.print(expression);
+            println!("{}", printer.print(expression));
         }
     }
 

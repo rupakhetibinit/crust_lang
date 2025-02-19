@@ -70,7 +70,6 @@ impl Parser {
     }
 
     fn previous(&self) -> Token {
-        println!("{}, {}", self.current, self.current);
         self.tokens
             .get(self.current - 1)
             .expect("Previous was empty")
@@ -117,7 +116,6 @@ impl Parser {
         let mut expr = self.unary()?;
 
         while matches!(self, TokenType::Slash, TokenType::Star) {
-            println!("self.current {}", self.current);
             let operator = self.previous();
             let right = self.unary()?;
             expr = Expr::Binary {
@@ -163,7 +161,6 @@ impl Parser {
                 value: self.previous().literal,
             }
         } else if matches!(self, TokenType::LeftParen) {
-            self.advance();
             let expr = self.expression()?;
             self.consume(TokenType::RightParen, "Expect ')' after expression.");
             Expr::Grouping {

@@ -22,6 +22,6 @@ pub fn parser_error(token: Token, message: &str) {
     if token.token_type == TokenType::Eof {
         report(token.line, " at end".to_string(), message);
     } else {
-        report(token.line, "".to_string(), message);
+        report(token.line, format!(" at '{}'", token.lexeme), message);
     }
 }

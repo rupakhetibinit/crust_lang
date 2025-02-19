@@ -95,6 +95,9 @@ mod tests {
         };
 
         let printer = AstPrinter;
-        assert_eq!(printer.print(expression), "(* (- 123) (group 45.67))");
+        assert_eq!(
+            printer.print(expression),
+            format!("(* (- 123) (group 45.67))")
+        );
     }
 }
