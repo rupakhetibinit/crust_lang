@@ -3,7 +3,7 @@ use std::{
     io::{self, Write},
 };
 
-use crate::{scanner::Scanner, HAD_ERROR};
+use crate::{expression::AstPrinter, parser::Parser, scanner::Scanner, HAD_ERROR};
 
 pub struct Lox {}
 
@@ -22,8 +22,11 @@ impl Lox {
 
         let tokens = scanner.scan_tokens();
 
-        for token in tokens {
-            println!("{}", token)
+        let mut parser = Parser::new(tokens);
+
+        if let Some(expression) = parser.parse() {
+            let printer = AstPrinter;
+            printer.print(expression);
         }
     }
 
