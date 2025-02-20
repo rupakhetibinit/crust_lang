@@ -3,11 +3,17 @@ use std::{
     io::{self, Write},
 };
 
-use crate::{
-    expression::AstPrinter, interpreter::Interpreter, parser::Parser, scanner::Scanner, HAD_ERROR,
+use codespan_reporting::{
+    diagnostic::{Diagnostic, Label},
+    term::{
+        self,
+        termcolor::{ColorChoice, StandardStream},
+    },
 };
 
-pub struct Lox {}
+use crate::{error::Error, interpreter::Interpreter, parser::Parser, scanner::Scanner, HAD_ERROR};
+
+pub struct Lox;
 
 impl Lox {
     pub fn new() -> Self {
@@ -34,16 +40,30 @@ impl Lox {
 
         let expression = parser.parse();
 
-        let printer = AstPrinter;
+        let files = parser.files().clone();
+        let file_id = parser.file_id().clone();
+
         let interpreter = Interpreter;
 
-        if expression.is_none() {
-            return;
+        if let Some(e) = expression {
+            match interpreter.evaluate(&e) {
+                Ok(result) => println!("{}", result),
+                Err(e) => match e {
+                    Error::Runtime { token, message } => {
+                        let writer = StandardStream::stderr(ColorChoice::Always);
+                        let config = codespan_reporting::term::Config::default();
+
+                        let diagnostic = Diagnostic::error()
+                            .with_message(message.clone())
+                            .with_labels(vec![Label::primary(file_id, token.span.0..token.span.1)
+                                .with_message(message)]);
+
+                        term::emit(&mut writer.lock(), &config, &files, &diagnostic).unwrap();
+                    }
+                    _ => {}
+                },
+            }
         }
-
-        println!("{}", printer.print(expression.as_ref().unwrap()).unwrap());
-
-        println!("{:?}", interpreter.evaluate(&expression.unwrap()));
     }
 
     pub fn run_prompt(&self) {

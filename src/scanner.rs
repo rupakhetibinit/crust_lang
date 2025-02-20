@@ -7,7 +7,7 @@ use codespan_reporting::{
     },
 };
 
-use crate::{expression::Object, token::*, KEYWORDS};
+use crate::{token::*, KEYWORDS};
 
 #[derive(Debug)]
 pub struct Scanner {
@@ -168,7 +168,7 @@ impl Scanner {
         }
 
         // Look for decimal point with fractional part
-        let has_fraction = if self.peek() == Some('.') {
+        if self.peek() == Some('.') {
             // Check if next character is a digit
             if self.peek_next().map_or(false, |c| c.is_ascii_digit()) {
                 self.advance(); // Consume the '.'

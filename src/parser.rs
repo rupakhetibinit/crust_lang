@@ -8,7 +8,7 @@ use codespan_reporting::{
 };
 
 use crate::{
-    error::{parser_error, Error},
+    error::Error,
     expression::{Expr, Object},
     token::{Token, TokenType},
 };
@@ -250,6 +250,14 @@ impl Parser {
 
             self.advance();
         }
+    }
+
+    pub fn files(&self) -> Files<String> {
+        self.files.clone()
+    }
+
+    pub fn file_id(&self) -> FileId {
+        self.file_id.clone()
     }
 }
 
