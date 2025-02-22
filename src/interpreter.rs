@@ -1,14 +1,30 @@
 use crate::{
     error::Error,
     expression::{Expr, Object},
+    syntax::Stmt,
     token::{Token, TokenType},
 };
 
 pub struct Interpreter;
 
 impl Interpreter {
-    pub fn evaluate(&self, expression: &Expr) -> Result<Object, Error> {
-        match expression {
+    pub fn evaluate(&self, statement: &Stmt) -> Result<Object, Error> {
+        match statement {
+            Stmt::Expression { expression } => self.evaluate_expr(expression),
+            Stmt::Print { expression } => self.evaluate_print(expression),
+        }
+    }
+
+    fn evaluate_print(&self, expression: &Expr) -> Result<Object, Error> {
+        let expr = self.evaluate_expr(expression)?;
+
+        println!("{}", expr);
+
+        return Ok(Object::Null);
+    }
+
+    pub fn evaluate_expr(&self, expression: &Expr) -> Result<Object, Error> {
+        let value = match expression {
             Expr::Binary {
                 left,
                 operator,
@@ -16,8 +32,10 @@ impl Interpreter {
             } => self.evaluate_binary(left, operator, right),
             Expr::Literal { value } => self.evaluate_literal(value),
             Expr::Unary { operator, right } => self.evaluate_unary(operator, right),
-            Expr::Grouping { expr } => self.evaluate(expr),
-        }
+            Expr::Grouping { expr } => self.evaluate_expr(expr),
+        };
+
+        value
     }
 
     fn is_truthy(&self, object: &Object) -> bool {
@@ -45,8 +63,8 @@ impl Interpreter {
         operator: &Token,
         right: &Expr,
     ) -> Result<Object, Error> {
-        let left_val = self.evaluate(left)?;
-        let right_val = self.evaluate(right)?;
+        let left_val = self.evaluate_expr(left)?;
+        let right_val = self.evaluate_expr(right)?;
 
         match (left_val, &operator.token_type, right_val) {
             (Object::Number(l), TokenType::Greater, Object::Number(r)) => {
@@ -104,7 +122,7 @@ impl Interpreter {
     }
 
     fn evaluate_unary(&self, operator: &Token, right: &Expr) -> Result<Object, Error> {
-        let right_val = self.evaluate(right)?;
+        let right_val = self.evaluate_expr(right)?;
 
         match (&operator.token_type, right_val) {
             (TokenType::Bang, value) => Ok(Object::Boolean(!self.is_truthy(&value))),

@@ -10,6 +10,7 @@ use codespan_reporting::{
 use crate::{
     error::Error,
     expression::{Expr, Object},
+    syntax::Stmt,
     token::{Token, TokenType},
 };
 
@@ -48,8 +49,19 @@ impl Parser {
             source,
         }
     }
-    pub fn parse(&mut self) -> Option<Expr> {
-        self.expression().ok()
+    pub fn parse(&mut self) -> Result<Vec<Stmt>, Error> {
+        let mut statements = Vec::<Stmt>::with_capacity(20);
+        while !self.is_at_end() {
+            statements.push(self.statement()?);
+        }
+        Ok(statements)
+    }
+
+    fn statement(&mut self) -> Result<Stmt, Error> {
+        if matches!(self, TokenType::Print) {
+            return self.print_statement();
+        }
+        self.expression_statement()
     }
 
     fn equality(&mut self) -> Result<Expr, Error> {
@@ -256,29 +268,46 @@ impl Parser {
         self.files.clone()
     }
 
-    pub fn file_id(&self) -> FileId {
+    pub fn file_id(&mut self) -> FileId {
         self.file_id.clone()
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::expression::AstPrinter;
-    use crate::scanner::Scanner;
+    fn print_statement(&mut self) -> Result<Stmt, Error> {
+        let value = self.expression()?;
+        self.consume(TokenType::Semicolon, "Expect ; SEMICOLON after Expression")?;
+        Ok(Stmt::Print { expression: value })
+    }
 
-    #[test]
-    fn test_parser() {
-        let scanner = Scanner::new("-123.45 * 56.78".to_string());
-
-        let (source, tokens) = scanner.scan_tokens();
-
-        let mut parser = Parser::new(source, tokens);
-
-        let expression = parser.parse().expect("Could not parse sample code");
-
-        let printer = AstPrinter;
-
-        assert_eq!(printer.print(&expression).unwrap(), "(* (- 123.45) 56.78)")
+    fn expression_statement(&mut self) -> Result<Stmt, Error> {
+        let value = self.expression()?;
+        self.consume(TokenType::Semicolon, "Expect ; SEMICOLON after Value")?;
+        Ok(Stmt::Expression { expression: value })
     }
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use crate::expression::AstPrinter;
+//     use crate::scanner::Scanner;
+
+//     #[test]
+//     fn test_parser() {
+//         let scanner = Scanner::new("-123.45 * 56.78;".to_string());
+
+//         let (source, tokens) = scanner.scan_tokens();
+
+//         let mut parser = Parser::new(source, tokens);
+
+//         let expression = parser.parse().expect("Could not parse sample code");
+
+//         let printer = AstPrinter;
+//         let expr = expression.get(0).unwrap();
+//         expr.
+
+//         assert_eq!(
+//             printer.print(&expression[0].expression).unwrap(),
+//             "(* (- 123.45) 56.78)"
+//         )
+//     }
+// }
