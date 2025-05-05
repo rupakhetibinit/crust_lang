@@ -2,6 +2,8 @@ use core::fmt;
 
 use crate::{error::Error, token::Token};
 
+// use crate::{error::Error, token::Token};
+
 #[derive(Debug, Clone)]
 pub enum Expr {
     Binary {

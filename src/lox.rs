@@ -11,7 +11,10 @@ use codespan_reporting::{
     },
 };
 
-use crate::{error::Error, interpreter::Interpreter, parser::Parser, scanner::Scanner, HAD_ERROR};
+use crate::{
+    constants::*, error::Error, expression::Object, interpreter::Interpreter, parser::Parser,
+    scanner::Scanner,
+};
 
 pub struct Lox;
 
@@ -20,12 +23,12 @@ impl Lox {
         Lox {}
     }
 
-    pub fn run_file(&self, path: &str) {
+    pub fn run_file(&self, path: &str) -> Option<Object> {
         let content = fs::read_to_string(path).expect("Couldn't read file");
         self.run(&content)
     }
 
-    pub fn run(&self, content: &String) {
+    pub fn run(&self, content: &String) -> Option<Object> {
         let scanner = Scanner::new(content.to_owned());
 
         let (source, tokens) = scanner.scan_tokens();
@@ -35,7 +38,7 @@ impl Lox {
         let had_error = HAD_ERROR.lock().unwrap();
 
         if *had_error == true {
-            return;
+            return None;
         };
 
         let statements = parser.parse();
@@ -49,7 +52,9 @@ impl Lox {
             Ok(stmts) => {
                 for stmt in stmts {
                     match interpreter.evaluate(&stmt) {
-                        Ok(result) => {}
+                        Ok(result) => {
+                            return Some(result);
+                        }
                         Err(e) => match e {
                             Error::Runtime { token, message } => {
                                 let writer = StandardStream::stderr(ColorChoice::Always);
@@ -86,6 +91,7 @@ impl Lox {
                 Error::Parse => {}
             },
         }
+        None
     }
 
     pub fn run_prompt(&self) {

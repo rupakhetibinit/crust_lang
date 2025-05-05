@@ -7,7 +7,10 @@ use codespan_reporting::{
     },
 };
 
-use crate::{token::*, KEYWORDS};
+use crate::{
+    other_constants::KEYWORDS,
+    token::{Token, TokenType},
+};
 
 #[derive(Debug)]
 pub struct Scanner {
