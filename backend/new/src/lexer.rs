@@ -1,4 +1,5 @@
-use std::{iter::Peekable, str::Chars};
+use std::error::Error;
+use std::{iter::Peekable, path::Path, str::Chars};
 
 use crate::token::Token;
 
@@ -11,6 +12,14 @@ impl<'a> Lexer<'a> {
         Self {
             input: src.chars().peekable(),
         }
+    }
+
+    pub fn new_from_file(file_path: &Path) -> Result<Lexer<'a>, Box<dyn Error>> {
+        let file_contents = std::fs::read_to_string(file_path)?;
+
+        Ok(Lexer {
+            input: Box::leak(file_contents.into_boxed_str()).chars().peekable(),
+        })
     }
 
     fn consume_while<F: Fn(char) -> bool>(&mut self, cond: F) -> String {
@@ -56,7 +65,7 @@ impl<'a> Lexer<'a> {
                     let number = self.consume_while(|c| c.is_numeric());
                     return Token::Number(number.parse::<i64>().unwrap());
                 }
-                'a'..'z' | 'A'..'Z' | '_' => {
+                'a'..='z' | 'A'..='Z' | '_' => {
                     let ident = self.consume_while(|c| c.is_alphabetic() || c == '_');
 
                     return match ident.as_str() {
@@ -84,7 +93,14 @@ impl<'a> Lexer<'a> {
                     self.input.next();
                     return Token::Semicolon;
                 }
-
+                '(' => {
+                    self.input.next();
+                    return Token::LParen;
+                }
+                ')' => {
+                    self.input.next();
+                    return Token::RParen;
+                }
                 _ => return Token::EOF,
             }
         }

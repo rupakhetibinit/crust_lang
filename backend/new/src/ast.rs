@@ -19,11 +19,6 @@ pub enum AstKind {
     Sub(AstNodeId, AstNodeId),
 }
 
-#[derive(Debug)]
-struct Value {
-    data: i64,
-}
-
 new_key_type! {
     pub struct AstNodeId;
     pub struct ValueId;

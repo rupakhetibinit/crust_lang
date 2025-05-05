@@ -51,23 +51,17 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_expr(&mut self, op_prec: u8) -> AstNodeId {
+    fn parse_expr(&mut self, min_prec: u8) -> AstNodeId {
         let mut left = self.parse_primary();
 
-        while let Some(op_prec) = precedence(self.peek()) {
-            let assoc_prec = if matches!(self.peek(), Token::Caret) {
-                op_prec + 1
-            } else {
-                op_prec
-            };
-
-            if assoc_prec < op_prec {
+        while let Some(prec) = precedence(self.peek()) {
+            if prec < min_prec {
                 break;
             }
 
             let op = self.next();
 
-            let right = self.parse_expr(op_prec + 1);
+            let right = self.parse_expr(prec + 1);
 
             left = self.ast.insert(match op {
                 Token::Caret => AstNode {
@@ -98,7 +92,7 @@ impl<'a> Parser<'a> {
         let name = if let Token::Ident(name) = self.next() {
             self.interner.get_or_intern(&name)
         } else {
-            panic!("Expected identifier after Let")
+            panic!("Expected identifier after Let found {:?}", self.peek())
         };
 
         self.expect(Token::Equal);
@@ -192,7 +186,6 @@ impl<'a> Parser<'a> {
 
 fn precedence(op: &Token) -> Option<u8> {
     match op {
-        Token::Caret => Some(3), // highest precedence
         Token::Star | Token::Slash => Some(2),
         Token::Plus | Token::Minus => Some(1),
         _ => None,
