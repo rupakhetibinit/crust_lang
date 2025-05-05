@@ -1,4 +1,3 @@
-use core::num;
 use std::{iter::Peekable, str::Chars};
 
 use crate::token::Token;
@@ -56,6 +55,34 @@ impl<'a> Lexer<'a> {
                 '0'..'9' => {
                     let number = self.consume_while(|c| c.is_numeric());
                     return Token::Number(number.parse::<i64>().unwrap());
+                }
+                'a'..'z' | 'A'..'Z' | '_' => {
+                    let ident = self.consume_while(|c| c.is_alphabetic() || c == '_');
+
+                    return match ident.as_str() {
+                        "let" => Token::Let,
+                        _ => Token::Ident(ident),
+                    };
+                }
+                '"' => {
+                    self.input.next();
+
+                    let ident = self.consume_while(|c| c.is_alphabetic());
+                    let expect = '"';
+
+                    if let Some(&x) = self.input.peek()
+                        && x != expect
+                    {
+                        panic!("Invalid string termination")
+                    }
+
+                    self.input.next();
+
+                    return Token::RawString(ident);
+                }
+                ';' => {
+                    self.input.next();
+                    return Token::Semicolon;
                 }
 
                 _ => return Token::EOF,

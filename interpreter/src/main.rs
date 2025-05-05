@@ -1,31 +1,35 @@
-use std::{env, process};
+use std::env;
 
-// use old::lox::Lox;
-use new::{lexer::Lexer, token::Token};
+use new::{
+    ast::{AstNode, AstNodeId, Symbol},
+    lexer::Lexer,
+    parser::Parser,
+    token::Token,
+};
+use slotmap::SlotMap;
+use string_interner::{StringInterner, backend::StringBackend};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    let mut lexer = Lexer::new("1 + 3 + 5 / 2");
+    let mut interner = StringInterner::<StringBackend<Symbol>>::new();
+    let mut ast_nodes = SlotMap::<AstNodeId, AstNode>::with_key();
+    let mut lexer = Lexer::new("let x = 2; 1 + 2 + 3; let main_thing = \"something\"");
 
+    let mut tokens = vec![];
     loop {
-        let current = lexer.next_token();
-
-        if current == Token::EOF {
+        let tok = lexer.next_token();
+        if tok == Token::EOF {
             break;
         }
-        println!("{current:?}");
+        tokens.push(tok);
     }
 
-    // match args.len() {
-    //     1 => lox.run_prompt(),
-    //     2 => {
-    //         let result = lox.run_file(&args[1]);
-    //         println!("{}", result.unwrap())
-    //     }
-    //     _ => {
-    //         println!("Usage: rust-lox [script]");
-    //         process::exit(64);
-    //     }
-    // }
+    let mut parser = Parser::new(tokens, &mut interner, &mut ast_nodes);
+
+    let mut stmts: Vec<AstNodeId> = Vec::new();
+    while parser.peek() != &Token::EOF {
+        let root = parser.parse_stmt();
+        parser.print_ast(root, 4);
+    }
 }
