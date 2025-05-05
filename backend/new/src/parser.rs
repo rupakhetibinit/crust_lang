@@ -1,6 +1,6 @@
 use crate::{
     ast::{AstKind, AstNode, AstNodeId, Symbol},
-    token::{self, Token},
+    token::Token,
 };
 use core::panic;
 use slotmap::SlotMap;
@@ -43,27 +43,50 @@ impl<'a> Parser<'a> {
     pub fn parse_stmt(&mut self) -> AstNodeId {
         match self.peek() {
             Token::Let => self.parse_let(),
-            _ => self.parse_expr(),
+            _ => {
+                let expr = self.parse_expr(0);
+                self.expect(Token::Semicolon);
+                expr
+            }
         }
     }
 
-    fn parse_expr(&mut self) -> AstNodeId {
+    fn parse_expr(&mut self, op_prec: u8) -> AstNodeId {
         let mut left = self.parse_primary();
 
-        loop {
-            match self.peek() {
-                Token::Plus => {
-                    self.next(); // consume '+'
-                    let right = self.parse_primary();
-                    left = self.ast.insert(AstNode {
-                        kind: AstKind::Add(left, right),
-                    });
-                }
-                Token::Semicolon | Token::EOF | Token::RParen => break,
-                unexpected => {
-                    panic!("Unexpected token in expression {:?}", unexpected);
-                }
+        while let Some(op_prec) = precedence(self.peek()) {
+            let assoc_prec = if matches!(self.peek(), Token::Caret) {
+                op_prec + 1
+            } else {
+                op_prec
+            };
+
+            if assoc_prec < op_prec {
+                break;
             }
+
+            let op = self.next();
+
+            let right = self.parse_expr(op_prec + 1);
+
+            left = self.ast.insert(match op {
+                Token::Caret => AstNode {
+                    kind: AstKind::Pow(left, right),
+                },
+                Token::Plus => AstNode {
+                    kind: AstKind::Add(left, right),
+                },
+                Token::Minus => AstNode {
+                    kind: AstKind::Sub(left, right),
+                },
+                Token::Star => AstNode {
+                    kind: AstKind::Mul(left, right),
+                },
+                Token::Slash => AstNode {
+                    kind: AstKind::Div(left, right),
+                },
+                _ => unreachable!("Reached unreachable code"),
+            })
         }
 
         left
@@ -80,7 +103,7 @@ impl<'a> Parser<'a> {
 
         self.expect(Token::Equal);
 
-        let expr_id = self.parse_expr();
+        let expr_id = self.parse_expr(0);
         self.expect(Token::Semicolon);
 
         self.ast.insert(AstNode {
@@ -102,12 +125,15 @@ impl<'a> Parser<'a> {
                 })
             }
             Token::LParen => {
-                let expr = self.parse_expr();
+                let expr = self.parse_expr(0);
                 self.expect(Token::RParen);
                 expr
             }
-            Token::Semicolon | Token::RParen | Token::EOF => {
-                panic!("Unexpected token in primary expression: {:?}", self.peek());
+            Token::RawString(raw) => {
+                let sym = self.interner.get_or_intern(raw);
+                self.ast.insert(AstNode {
+                    kind: AstKind::RawString(sym),
+                })
             }
             t => panic!("Unexpected token in expression: {:?}", t),
         }
@@ -135,6 +161,40 @@ impl<'a> Parser<'a> {
                 self.print_ast(*lhs, indent + 1);
                 self.print_ast(*rhs, indent + 1);
             }
+            AstKind::Pow(lhs, rhs) => {
+                println!("{pad}Pow");
+                self.print_ast(*lhs, indent + 1);
+                self.print_ast(*rhs, indent + 1);
+            }
+            AstKind::Div(lhs, rhs) => {
+                println!("{pad}Div");
+                self.print_ast(*lhs, indent + 1);
+                self.print_ast(*rhs, indent + 1);
+            }
+            AstKind::Mul(lhs, rhs) => {
+                println!("{pad}Mul");
+                self.print_ast(*lhs, indent + 1);
+                self.print_ast(*rhs, indent + 1);
+            }
+            AstKind::Sub(lhs, rhs) => {
+                println!("{pad}Sub");
+                self.print_ast(*lhs, indent + 1);
+                self.print_ast(*rhs, indent + 1);
+            }
+            AstKind::RawString(sym) => {
+                let string = self.interner.resolve(*sym).unwrap();
+
+                println!("{pad}RawString({string})");
+            }
         }
+    }
+}
+
+fn precedence(op: &Token) -> Option<u8> {
+    match op {
+        Token::Caret => Some(3), // highest precedence
+        Token::Star | Token::Slash => Some(2),
+        Token::Plus | Token::Minus => Some(1),
+        _ => None,
     }
 }

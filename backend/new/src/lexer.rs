@@ -46,11 +46,11 @@ impl<'a> Lexer<'a> {
                 }
                 '*' => {
                     self.input.next();
-                    return Token::Multiply;
+                    return Token::Star;
                 }
                 '/' => {
                     self.input.next();
-                    return Token::Divide;
+                    return Token::Slash;
                 }
                 '0'..'9' => {
                     let number = self.consume_while(|c| c.is_numeric());

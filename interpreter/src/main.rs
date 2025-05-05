@@ -14,7 +14,7 @@ fn main() {
 
     let mut interner = StringInterner::<StringBackend<Symbol>>::new();
     let mut ast_nodes = SlotMap::<AstNodeId, AstNode>::with_key();
-    let mut lexer = Lexer::new("let x = 2; 1 + 2 + 3; let main_thing = \"something\"");
+    let mut lexer = Lexer::new(r#"let x = 2; 1 + 2 + 3; let main_thing = "something";"#);
 
     let mut tokens = vec![];
     loop {

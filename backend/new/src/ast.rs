@@ -10,8 +10,13 @@ pub struct AstNode {
 pub enum AstKind {
     Number(i64),
     Var(Symbol),
+    RawString(Symbol),
     Add(AstNodeId, AstNodeId),
     Assign(Symbol, AstNodeId),
+    Pow(AstNodeId, AstNodeId),
+    Div(AstNodeId, AstNodeId),
+    Mul(AstNodeId, AstNodeId),
+    Sub(AstNodeId, AstNodeId),
 }
 
 #[derive(Debug)]
