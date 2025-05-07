@@ -2,6 +2,7 @@ use std::env;
 
 use new::{
     ast::{AstNode, AstNodeId, Symbol},
+    interpreter::Interpreter,
     lexer::Lexer,
     parser::Parser,
     token::Token,
@@ -22,7 +23,12 @@ fn main() {
         let xy = ((1 + 2) * 3 + (4 * 5)); 
         let xyz = 1324 {}
         print(1 + 2 * 3);
-        print(let)",
+        print(let);
+        2;
+        print(2 + 2);
+        print(2 + 2 / 3);
+        print(x);
+        print(main_thing);",
     );
 
     let mut tokens = vec![];
@@ -34,16 +40,8 @@ fn main() {
         tokens.push(tok);
     }
 
-    let mut parser = Parser::new(tokens, &mut interner, &mut ast_nodes);
+    let parser = Parser::new(tokens, &mut interner, &mut ast_nodes);
+    let mut int = Interpreter::new(parser);
 
-    while parser.peek() != &Token::EOF {
-        match parser.parse_stmt() {
-            Ok(stmt) => {
-                parser.print_ast(stmt, 0);
-            }
-            Err(err) => {
-                println!("Error: {:?}", err);
-            }
-        }
-    }
+    int.evaluate().unwrap();
 }

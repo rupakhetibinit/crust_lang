@@ -9,8 +9,8 @@ use string_interner::{StringInterner, backend::StringBackend};
 
 pub struct Parser<'a> {
     tokens: Peekable<std::vec::IntoIter<Token>>,
-    interner: &'a mut StringInterner<StringBackend<Symbol>>,
-    ast: &'a mut SlotMap<AstNodeId, AstNode>,
+    pub interner: &'a mut StringInterner<StringBackend<Symbol>>,
+    pub ast: &'a mut SlotMap<AstNodeId, AstNode>,
 }
 
 #[derive(Debug)]
