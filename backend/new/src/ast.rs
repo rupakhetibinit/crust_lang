@@ -17,6 +17,7 @@ pub enum AstKind {
     Div(AstNodeId, AstNodeId),
     Mul(AstNodeId, AstNodeId),
     Sub(AstNodeId, AstNodeId),
+    Print(AstNodeId),
 }
 
 new_key_type! {

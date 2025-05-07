@@ -70,6 +70,7 @@ impl<'a> Lexer<'a> {
 
                     return match ident.as_str() {
                         "let" => Token::Let,
+                        "print" => Token::Print,
                         _ => Token::Ident(ident),
                     };
                 }

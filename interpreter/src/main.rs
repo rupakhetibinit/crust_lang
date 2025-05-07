@@ -15,7 +15,14 @@ fn main() {
     let mut interner = StringInterner::<StringBackend<Symbol>>::new();
     let mut ast_nodes = SlotMap::<AstNodeId, AstNode>::with_key();
     let mut lexer = Lexer::new(
-        "let x = 2; let y = (1 + 2) * 3; let main_thing = \"something\"; let z = 1 * 2 + 3; let f = 1 * (2 + 3); let xy = ((1 + 2) * 3 + (4 * 5)); let xyz = 1324 {}",
+        "let x = 2; let y = (1 + 2) * 3; 
+        let main_thing = \"something\"; 
+        let z = 1 * 2 + 3; 
+        let f = 1 * (2 + 3); 
+        let xy = ((1 + 2) * 3 + (4 * 5)); 
+        let xyz = 1324 {}
+        print(1 + 2 * 3);
+        print(let)",
     );
 
     let mut tokens = vec![];

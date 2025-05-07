@@ -56,6 +56,7 @@ impl<'a> Parser<'a> {
     pub fn parse_stmt(&mut self) -> Result<AstNodeId, ParseError> {
         match self.peek() {
             Token::Let => Ok(self.parse_let()?),
+            Token::Print => Ok(self.parse_print()?),
             _ => {
                 let expr = self.parse_expr(0)?;
                 self.expect(Token::Semicolon)?;
@@ -199,7 +200,23 @@ impl<'a> Parser<'a> {
 
                 println!("{pad}RawString({string})");
             }
+            AstKind::Print(ast) => {
+                println!("{pad}Print");
+                self.print_ast(*ast, indent + 1);
+            }
         }
+    }
+
+    fn parse_print(&mut self) -> Result<AstNodeId, ParseError> {
+        self.expect(Token::Print)?;
+        self.expect(Token::LParen)?;
+        let expr = self.parse_expr(0)?;
+        self.expect(Token::RParen)?;
+        self.expect(Token::Semicolon)?;
+
+        Ok(self.ast.insert(AstNode {
+            kind: AstKind::Print(expr),
+        }))
     }
 }
 

@@ -16,4 +16,5 @@ pub enum Token {
     Caret,
     LBrace,
     RBrace,
+    Print,
 }
