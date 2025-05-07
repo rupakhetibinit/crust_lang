@@ -2,7 +2,7 @@ use crate::{
     ast::{AstKind, AstNode, AstNodeId, Symbol},
     token::Token,
 };
-use core::panic;
+
 use slotmap::SlotMap;
 use std::iter::Peekable;
 use string_interner::{StringInterner, backend::StringBackend};
@@ -11,6 +11,12 @@ pub struct Parser<'a> {
     tokens: Peekable<std::vec::IntoIter<Token>>,
     interner: &'a mut StringInterner<StringBackend<Symbol>>,
     ast: &'a mut SlotMap<AstNodeId, AstNode>,
+}
+
+#[derive(Debug)]
+pub enum ParseError {
+    UnexpectedToken(String),
+    Unreachable,
 }
 
 impl<'a> Parser<'a> {
@@ -34,25 +40,32 @@ impl<'a> Parser<'a> {
         self.tokens.next().unwrap_or(Token::EOF)
     }
 
-    fn expect(&mut self, expect: Token) {
+    fn expect(&mut self, expect: Token) -> Result<(), ParseError> {
         let next = self.next();
 
-        assert_eq!(next, expect, "Expected {:?}, got {:?}", expect, next);
+        if next != expect {
+            Err(ParseError::UnexpectedToken(format!(
+                "Expected {:?}, got {:?}",
+                expect, next
+            )))
+        } else {
+            Ok(())
+        }
     }
 
-    pub fn parse_stmt(&mut self) -> AstNodeId {
+    pub fn parse_stmt(&mut self) -> Result<AstNodeId, ParseError> {
         match self.peek() {
-            Token::Let => self.parse_let(),
+            Token::Let => Ok(self.parse_let()?),
             _ => {
-                let expr = self.parse_expr(0);
-                self.expect(Token::Semicolon);
-                expr
+                let expr = self.parse_expr(0)?;
+                self.expect(Token::Semicolon)?;
+                Ok(expr)
             }
         }
     }
 
-    fn parse_expr(&mut self, min_prec: u8) -> AstNodeId {
-        let mut left = self.parse_primary();
+    fn parse_expr(&mut self, min_prec: u8) -> Result<AstNodeId, ParseError> {
+        let mut left = self.parse_primary()?;
 
         while let Some(prec) = precedence(self.peek()) {
             if prec < min_prec {
@@ -61,7 +74,7 @@ impl<'a> Parser<'a> {
 
             let op = self.next();
 
-            let right = self.parse_expr(prec + 1);
+            let right = self.parse_expr(prec + 1)?;
 
             left = self.ast.insert(match op {
                 Token::Caret => AstNode {
@@ -79,57 +92,63 @@ impl<'a> Parser<'a> {
                 Token::Slash => AstNode {
                     kind: AstKind::Div(left, right),
                 },
-                _ => unreachable!("Reached unreachable code"),
+                _ => Err(ParseError::Unreachable)?,
             })
         }
 
-        left
+        Ok(left)
     }
 
-    fn parse_let(&mut self) -> AstNodeId {
-        self.expect(Token::Let);
+    fn parse_let(&mut self) -> Result<AstNodeId, ParseError> {
+        self.expect(Token::Let)?;
 
         let name = if let Token::Ident(name) = self.next() {
             self.interner.get_or_intern(&name)
         } else {
-            panic!("Expected identifier after Let found {:?}", self.peek())
+            return Err(ParseError::UnexpectedToken(format!(
+                "Unexpected identifier after let found, {:?}",
+                self.peek()
+            )));
         };
 
-        self.expect(Token::Equal);
+        self.expect(Token::Equal)?;
 
-        let expr_id = self.parse_expr(0);
-        self.expect(Token::Semicolon);
+        let expression = self.parse_expr(0)?;
+        self.expect(Token::Semicolon)?;
 
-        self.ast.insert(AstNode {
-            kind: AstKind::Assign(name, expr_id),
-        })
+        Ok(self.ast.insert(AstNode {
+            kind: AstKind::Assign(name, expression),
+        }))
     }
 
-    fn parse_primary(&mut self) -> AstNodeId {
+    fn parse_primary(&mut self) -> Result<AstNodeId, ParseError> {
         match self.next() {
             Token::Number(n) => {
-                return self.ast.insert(AstNode {
+                return Ok(self.ast.insert(AstNode {
                     kind: AstKind::Number(n),
-                });
+                }));
             }
             Token::Ident(name) => {
                 let sym = self.interner.get_or_intern(&name);
-                self.ast.insert(AstNode {
+                Ok(self.ast.insert(AstNode {
                     kind: AstKind::Var(sym),
-                })
+                }))
             }
             Token::LParen => {
-                let expr = self.parse_expr(0);
-                self.expect(Token::RParen);
-                expr
+                let expr = self.parse_expr(0)?;
+                self.expect(Token::RParen)?;
+                Ok(expr)
             }
             Token::RawString(raw) => {
                 let sym = self.interner.get_or_intern(raw);
-                self.ast.insert(AstNode {
+                Ok(self.ast.insert(AstNode {
                     kind: AstKind::RawString(sym),
-                })
+                }))
             }
-            t => panic!("Unexpected token in expression: {:?}", t),
+            t => Err(ParseError::UnexpectedToken(format!(
+                "Unexpected token in expression: {:?}",
+                t
+            ))),
         }
     }
 

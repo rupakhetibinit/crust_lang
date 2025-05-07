@@ -101,6 +101,14 @@ impl<'a> Lexer<'a> {
                     self.input.next();
                     return Token::RParen;
                 }
+                '{' => {
+                    self.input.next();
+                    return Token::LBrace;
+                }
+                '}' => {
+                    self.input.next();
+                    return Token::RBrace;
+                }
                 _ => return Token::EOF,
             }
         }

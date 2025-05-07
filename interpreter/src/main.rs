@@ -15,7 +15,7 @@ fn main() {
     let mut interner = StringInterner::<StringBackend<Symbol>>::new();
     let mut ast_nodes = SlotMap::<AstNodeId, AstNode>::with_key();
     let mut lexer = Lexer::new(
-        "let x = 2; let y = (1 + 2) * 3; let main_thing = \"something\"; let z = 1 * 2 + 3; let f = 1 * (2 + 3); let xy = ((1 + 2) * 3 + (4 * 5));",
+        "let x = 2; let y = (1 + 2) * 3; let main_thing = \"something\"; let z = 1 * 2 + 3; let f = 1 * (2 + 3); let xy = ((1 + 2) * 3 + (4 * 5)); let xyz = 1324 {}",
     );
 
     let mut tokens = vec![];
@@ -30,7 +30,13 @@ fn main() {
     let mut parser = Parser::new(tokens, &mut interner, &mut ast_nodes);
 
     while parser.peek() != &Token::EOF {
-        let root = parser.parse_stmt();
-        parser.print_ast(root, 0);
+        match parser.parse_stmt() {
+            Ok(stmt) => {
+                parser.print_ast(stmt, 0);
+            }
+            Err(err) => {
+                println!("Error: {:?}", err);
+            }
+        }
     }
 }

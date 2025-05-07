@@ -14,4 +14,6 @@ pub enum Token {
     RParen,
     EOF,
     Caret,
+    LBrace,
+    RBrace,
 }
