@@ -1,6 +1,4 @@
-use std::{collections::HashMap, fmt::format, string::ParseError};
-
-use string_interner::symbol::SymbolU32;
+use std::{collections::HashMap, string::ParseError};
 
 use crate::{
     ast::{AstKind, AstNodeId},
@@ -78,10 +76,9 @@ impl<'a> Interpreter<'a> {
                 self.env_values.insert(val, value);
                 "".to_owned()
             }
-            AstKind::Pow(ast_node_id, ast_node_id1) => format!("In Progress"),
+            AstKind::Pow(_base, _exp) => format!("In Progress"),
             AstKind::Print(ast_node_id) => {
                 let value = self.evaluate_statement(ast_node_id);
-
                 return value;
             }
         }

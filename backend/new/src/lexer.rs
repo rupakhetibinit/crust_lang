@@ -77,12 +77,13 @@ impl<'a> Lexer<'a> {
                 '"' => {
                     self.input.next();
 
-                    let ident = self.consume_while(|c| c.is_alphabetic());
+                    let ident = self.consume_while(|c| c != '"');
                     let expect = '"';
 
                     if let Some(&x) = self.input.peek()
                         && x != expect
                     {
+                        println!("{:?}, {:?}", self.input.peek(), expect);
                         panic!("Invalid string termination")
                     }
 
