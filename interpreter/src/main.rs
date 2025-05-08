@@ -18,6 +18,8 @@ fn main() {
             let mut interner = StringInterner::<StringBackend<Symbol>>::new();
             let mut ast_nodes = SlotMap::<AstNodeId, AstNode>::with_key();
 
+            println!("Welcome to the Crust Programing Language Repl");
+            println!("This is an interactive REPL.");
             loop {
                 let mut buffer = String::new();
                 print!("> ");
