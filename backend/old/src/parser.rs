@@ -27,6 +27,7 @@ macro_rules! matches {
     };
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Parser {
     tokens: Vec<Token>,
@@ -226,14 +227,9 @@ impl Parser {
         let writer = StandardStream::stderr(ColorChoice::Always);
         let config = term::Config::default();
 
-        let diagnostic =
-            Diagnostic::error()
-                .with_message(message)
-                .with_labels(vec![Label::primary(
-                    self.file_id,
-                    token.span.0..token.span.1,
-                )
-                .with_message(message)]);
+        let diagnostic = Diagnostic::error().with_message(message).with_labels(vec![
+            Label::primary(self.file_id, token.span.0..token.span.1).with_message(message),
+        ]);
 
         term::emit(&mut writer.lock(), &config, &self.files, &diagnostic)
             .expect("Failed to emit diagnostic");
@@ -241,6 +237,7 @@ impl Parser {
         Error::Parse
     }
 
+    #[allow(unused)]
     fn synchronize(&mut self) {
         self.advance();
 
