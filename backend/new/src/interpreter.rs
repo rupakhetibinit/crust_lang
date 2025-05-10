@@ -7,6 +7,13 @@ pub struct Interpreter {
     ast: Vec<AstNode>,
     roots: Vec<AstNodeId>,
     env: HashMap<String, String>,
+    functions: HashMap<String, Function>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Function {
+    pub arg_names: Vec<String>,
+    pub body: Vec<AstNodeId>,
 }
 
 #[derive(Debug)]
@@ -23,6 +30,7 @@ impl Interpreter {
             ast,
             roots,
             env: HashMap::new(),
+            functions: HashMap::new(),
         }
     }
 
@@ -30,8 +38,14 @@ impl Interpreter {
         ast: Vec<AstNode>,
         roots: Vec<AstNodeId>,
         env: HashMap<String, String>,
+        functions: HashMap<String, Function>,
     ) -> Self {
-        Self { ast, roots, env }
+        Self {
+            ast,
+            roots,
+            env,
+            functions,
+        }
     }
 
     pub fn run(&mut self) -> Result<(), EvalError> {
@@ -149,7 +163,7 @@ impl Interpreter {
                 "Pow operator not implemented yet".to_string(),
             )),
             AstKind::Print(expr_id) => self.eval_node(expr_id),
-            AstKind::ReAssign(var, expr_id) => {
+            AstKind::Reassignment(var, expr_id) => {
                 if !self.env.contains_key(&var) {
                     return Err(EvalError::UndefinedVariable(format!(
                         "Variable {var} is undefined."
@@ -161,6 +175,20 @@ impl Interpreter {
                 self.env.insert(var, val);
 
                 Ok(String::new())
+            }
+            AstKind::FunctionDeclaration { name, args, block } => todo!(),
+            AstKind::FunctionCall { func, args } => todo!(),
+            AstKind::Return(_) => todo!(),
+            AstKind::If {
+                expression,
+                block,
+                else_block,
+            } => todo!(),
+            AstKind::Equality(x, y) => {
+                let lhs = self.eval_node(x)?;
+                let rhs = self.eval_node(y)?;
+
+                Ok((lhs == rhs).to_string())
             }
         }
     }

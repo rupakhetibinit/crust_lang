@@ -1,11 +1,12 @@
 use std::{
+    collections::HashMap,
     fs,
     io::{self, Write},
 };
 
 use crate::{
     ast::{AstNode, AstNodeId},
-    interpreter::Interpreter,
+    interpreter::{Function, Interpreter},
     lexer::Lexer,
     parser::Parser,
     token::Token,
@@ -14,6 +15,7 @@ use crate::{
 pub struct Crust {
     ast: Vec<AstNode>,
     roots: Vec<AstNodeId>,
+    functions: HashMap<String, Function>,
 }
 
 impl Crust {
@@ -21,6 +23,7 @@ impl Crust {
         Crust {
             ast: Vec::new(),
             roots: Vec::new(),
+            functions: HashMap::new(),
         }
     }
 
@@ -54,7 +57,12 @@ impl Crust {
             Default::default()
         };
 
-        let mut interp = Interpreter::new_with_env(snippet_ast.clone(), snippet_roots.clone(), env);
+        let mut interp = Interpreter::new_with_env(
+            snippet_ast.clone(),
+            snippet_roots.clone(),
+            env,
+            self.functions.clone(),
+        );
         if let Err(e) = interp.run() {
             eprintln!("Runtime error: {:?}", e);
         }
@@ -63,7 +71,12 @@ impl Crust {
         self.roots = snippet_roots;
 
         let env = interp.get_environment();
-        let updated_interp = Interpreter::new_with_env(self.ast.clone(), self.roots.clone(), env);
+        let updated_interp = Interpreter::new_with_env(
+            self.ast.clone(),
+            self.roots.clone(),
+            env,
+            self.functions.clone(),
+        );
         self.ast = updated_interp.get_ast();
     }
 
@@ -131,7 +144,12 @@ impl Crust {
             }
         }
 
-        let mut interp = Interpreter::new_with_env(line_ast, line_roots, environment.clone());
+        let mut interp = Interpreter::new_with_env(
+            line_ast,
+            line_roots,
+            environment.clone(),
+            self.functions.clone(),
+        );
         if let Err(e) = interp.run() {
             eprintln!("Runtime error: {:?}", e);
         }

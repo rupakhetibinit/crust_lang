@@ -34,6 +34,14 @@ impl<'a> Parser<'a> {
         self.tokens.peek().unwrap_or(&Token::EOF)
     }
 
+    fn peek_nth(&self, n: usize) -> Option<Token> {
+        self.tokens.clone().nth(n)
+    }
+
+    fn peek_two(&self) -> (Option<Token>, Option<Token>) {
+        (self.peek_nth(0), self.peek_nth(1))
+    }
+
     fn next(&mut self) -> Token {
         self.tokens.next().unwrap_or(Token::EOF)
     }
@@ -62,16 +70,24 @@ impl<'a> Parser<'a> {
     pub fn parse_stmt(&mut self) -> Result<AstNodeId, ParseError> {
         let node_id = match self.peek() {
             Token::Let => self.parse_let()?,
+            Token::If => self.parse_if()?,
             Token::Print => self.parse_print()?,
-            Token::Ident(_) => {
-                if let Some(Token::Equal) = self.tokens.clone().into_iter().nth(1) {
-                    self.parse_ident()?
-                } else {
+            Token::Fn => self.parse_fn_decl()?,
+            Token::Return => self.parse_return()?,
+
+            Token::Ident(_) => match self.peek_nth(1) {
+                Some(Token::Equal) => self.parse_ident()?,
+                Some(Token::LParen) => {
+                    let call = self.parse_fn_call()?;
+                    self.expect(Token::Semicolon)?;
+                    call
+                }
+                _ => {
                     let expr = self.parse_expr(0)?;
                     self.expect(Token::Semicolon)?;
                     expr
                 }
-            }
+            },
             _ => {
                 let expr = self.parse_expr(0)?;
                 self.expect(Token::Semicolon)?;
@@ -100,6 +116,7 @@ impl<'a> Parser<'a> {
                 Token::Star => AstKind::Mul(left, right),
                 Token::Slash => AstKind::Div(left, right),
                 Token::Caret => AstKind::Pow(left, right),
+                Token::EqualEqual => AstKind::Equality(left, right),
                 _ => return Err(ParseError::Unreachable),
             };
 
@@ -139,6 +156,11 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_primary(&mut self) -> Result<AstNodeId, ParseError> {
+        if let Some(Token::Ident(_)) = self.peek_nth(0) {
+            if self.peek_nth(1) == Some(Token::LParen) {
+                return self.parse_fn_call();
+            }
+        }
         match self.next() {
             Token::Number(n) => {
                 let id = self.ast.len();
@@ -223,10 +245,19 @@ impl<'a> Parser<'a> {
                 println!("{pad}Print");
                 self.print_ast(*ast, indent + 1);
             }
-            AstKind::ReAssign(sym, rhs) => {
+            AstKind::Reassignment(sym, rhs) => {
                 println!("{pad}Reassign({sym})");
                 self.print_ast(*rhs, indent + 1);
             }
+            AstKind::FunctionDeclaration { name, args, block } => todo!(),
+            AstKind::FunctionCall { func, args } => todo!(),
+            AstKind::Return(_) => todo!(),
+            AstKind::If {
+                expression,
+                block,
+                else_block,
+            } => todo!(),
+            AstKind::Equality(_, _) => todo!(),
         }
     }
 
@@ -265,10 +296,181 @@ impl<'a> Parser<'a> {
 
         let id = self.ast.len();
         self.ast.push(AstNode {
-            kind: AstKind::ReAssign(name, expression),
+            kind: AstKind::Reassignment(name, expression),
         });
 
         Ok(id)
+    }
+
+    fn parse_fn_decl(&mut self) -> Result<AstNodeId, ParseError> {
+        self.expect(Token::Fn)?;
+
+        let name = if let Token::Ident(s) = self.next() {
+            s
+        } else {
+            return Err(ParseError::UnexpectedToken(format!(
+                "Unexpected identifier found, {:?}",
+                self.peek()
+            )));
+        };
+
+        self.expect(Token::LParen)?;
+
+        let mut args = Vec::new();
+
+        while let Token::Ident(arg) = self.peek() {
+            args.push(arg.clone());
+
+            self.next();
+
+            if matches!(self.peek(), Token::Comma) {
+                self.next();
+            } else {
+                break;
+            }
+        }
+
+        self.expect(Token::RParen)?;
+        self.expect(Token::LBrace)?;
+
+        let mut body = Vec::new();
+
+        while !matches!(self.peek(), Token::RBrace) {
+            let stmt = self.parse_stmt()?;
+            body.push(stmt);
+        }
+
+        self.expect(Token::RBrace)?;
+
+        let id = self.ast.len();
+
+        let node = AstNode {
+            kind: AstKind::FunctionDeclaration {
+                name,
+                args,
+                block: body,
+            },
+        };
+
+        self.ast.push(node);
+
+        Ok(id)
+    }
+
+    fn parse_if(&mut self) -> Result<AstNodeId, ParseError> {
+        self.expect(Token::If)?;
+
+        let expression = self.parse_expr(0)?;
+
+        self.expect(Token::LBrace)?;
+
+        let mut body = Vec::new();
+
+        while !matches!(self.peek(), Token::RBrace) {
+            let stmt = self.parse_stmt()?;
+            body.push(stmt);
+        }
+
+        self.expect(Token::RBrace)?;
+
+        let mut else_block = Vec::new();
+
+        if let Token::Else = self.peek() {
+            self.expect(Token::Else)?;
+
+            self.expect(Token::LBrace)?;
+
+            while !matches!(self.peek(), Token::RBrace) {
+                let stmt = self.parse_stmt()?;
+
+                else_block.push(stmt);
+            }
+
+            self.expect(Token::RBrace)?;
+        }
+
+        let id = self.ast.len();
+
+        let node = AstNode {
+            kind: AstKind::If {
+                expression,
+                block: body,
+                else_block,
+            },
+        };
+
+        self.ast.push(node);
+
+        Ok(id)
+    }
+
+    fn parse_return(&mut self) -> Result<AstNodeId, ParseError> {
+        self.expect(Token::Return)?;
+
+        let expr = self.parse_expr(0)?;
+
+        self.expect(Token::Semicolon)?;
+
+        let id = self.ast.len();
+
+        let node = AstNode {
+            kind: AstKind::Return(expr),
+        };
+
+        self.ast.push(node);
+
+        Ok(id)
+    }
+
+    fn parse_fn_call(&mut self) -> Result<AstNodeId, ParseError> {
+        let name = if let Token::Ident(s) = self.next() {
+            s
+        } else {
+            return Err(ParseError::UnexpectedToken(format!(
+                "Unexpected identifier found, {:?}",
+                self.peek()
+            )));
+        };
+
+        let func_id = {
+            let id = self.ast.len();
+            self.ast.push(AstNode {
+                kind: AstKind::Var(name.clone()),
+            });
+            id
+        };
+
+        self.expect(Token::LParen)?;
+
+        let mut args = vec![];
+
+        if !matches!(self.peek(), Token::RParen) {
+            {
+                loop {
+                    let expr_id = self.parse_expr(0)?;
+                    args.push(expr_id);
+
+                    if matches!(self.peek(), Token::Comma) {
+                        self.next();
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+
+        self.expect(Token::RParen)?;
+
+        let call_id = self.ast.len();
+
+        self.ast.push(AstNode {
+            kind: AstKind::FunctionCall {
+                func: func_id,
+                args: args,
+            },
+        });
+
+        Ok(call_id)
     }
 }
 
@@ -276,6 +478,7 @@ fn precedence(op: &Token) -> Option<u8> {
     match op {
         Token::Star | Token::Slash => Some(2),
         Token::Plus | Token::Minus => Some(1),
+        Token::EqualEqual | Token::Return => Some(0),
         _ => None,
     }
 }

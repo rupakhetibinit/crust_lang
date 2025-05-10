@@ -17,4 +17,11 @@ pub enum Token {
     LBrace,
     RBrace,
     Print,
+    Fn,
+    Comma,
+    Return,
+    ElseIf,
+    If,
+    Else,
+    EqualEqual,
 }
