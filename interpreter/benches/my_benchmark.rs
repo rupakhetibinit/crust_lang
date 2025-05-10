@@ -1,5 +1,5 @@
-use criterion::{criterion_group, criterion_main, Criterion};
-use lox::lox::Lox;
+use criterion::{Criterion, criterion_group, criterion_main};
+use old::lox::Lox;
 pub fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("SlotMap interpreter", |b| {
         b.iter(|| {
