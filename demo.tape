@@ -7,23 +7,26 @@ Set Width 1200
 Set Height 600
 
 Type "cargo run --quiet repl"
-
 Enter
-
-Sleep 1s
 
 Type `print("Hello world");`
 Enter
 Sleep 1s
 
 Type "1 + 2 + 6 / 2;"
-
 Enter
-
 Sleep 1s
 
 Type "(2 + 3 * 6 + 4 / 2);"
-
 Enter
-
 Sleep 1s
+
+Type "let x = 2;"
+Enter
+Type "x = x * 5;"
+Enter
+Sleep 0.5s
+Type "print(x);"
+Enter
+Sleep 1s
+

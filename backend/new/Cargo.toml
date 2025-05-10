@@ -4,8 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-slotmap = "1.0.7"
-string-interner = { version = "0.19.0", features = ["default"] }
 
 [lib]
 name = "new"

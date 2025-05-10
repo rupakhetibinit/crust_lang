@@ -1,85 +1,166 @@
-use std::{collections::HashMap, string::ParseError};
+use std::collections::HashMap;
 
-use crate::{
-    ast::{AstKind, AstNodeId},
-    parser::Parser,
-    token::Token,
-};
+use crate::ast::{AstKind, AstNode, AstNodeId};
 
-pub struct Interpreter<'a> {
-    pub parser: Parser<'a>,
-    env_values: HashMap<String, String>,
+#[derive(Debug)]
+pub struct Interpreter {
+    ast: Vec<AstNode>,
+    roots: Vec<AstNodeId>,
+    env: HashMap<String, String>,
 }
 
-impl<'a> Interpreter<'a> {
-    pub fn new(parser: Parser<'a>) -> Self {
+#[derive(Debug)]
+pub enum EvalError {
+    UndefinedVariable(String),
+    NotImplemented(String),
+    ParseError(String),
+    VariableAlreadyDefined(String),
+}
+
+impl Interpreter {
+    pub fn new(ast: Vec<AstNode>, roots: Vec<AstNodeId>) -> Self {
         Self {
-            parser,
-            env_values: HashMap::new(),
+            ast,
+            roots,
+            env: HashMap::new(),
         }
     }
 
-    pub fn evaluate(&mut self) -> Result<(), ParseError> {
-        while self.parser.peek() != &Token::EOF {
-            let statement = self.parser.parse_stmt();
-            match statement {
-                Ok(value) => {
-                    let value = self.evaluate_statement(value);
-                    println!("{}", value);
+    pub fn new_with_env(
+        ast: Vec<AstNode>,
+        roots: Vec<AstNodeId>,
+        env: HashMap<String, String>,
+    ) -> Self {
+        Self { ast, roots, env }
+    }
+
+    pub fn run(&mut self) -> Result<(), EvalError> {
+        let roots = self.roots.clone();
+        for stmt in roots {
+            match self.eval_node(stmt) {
+                Ok(out) => {
+                    if !out.is_empty() {
+                        println!("{}", out);
+                    }
                 }
-                Err(err) => {
-                    println!("Error {:?}", err);
-                }
+                Err(err) => println!("{:?}", err),
             }
         }
         Ok(())
     }
 
-    fn evaluate_statement(&mut self, statement: AstNodeId) -> String {
-        let stmt = self.parser.ast.get(statement).unwrap();
-        match stmt.kind {
-            AstKind::Number(x) => format!("{}", x),
-            AstKind::Var(value) => {
-                let get_if_its_variable = self.parser.interner.resolve(value).unwrap();
-                let actual_value = self.env_values.get(get_if_its_variable).unwrap();
-                format!("{}", actual_value)
-            }
-            AstKind::RawString(interned_string) => {
-                let actual = self.parser.interner.resolve(interned_string).unwrap();
-                format!("{}", actual)
-            }
-            AstKind::Add(left, right) => {
-                let lhs = self.evaluate_statement(left).parse::<i64>().unwrap();
-                let rhs = self.evaluate_statement(right).parse::<i64>().unwrap();
-                format!("{}", lhs + rhs)
-            }
-            AstKind::Div(left, right) => {
-                let lhs = self.evaluate_statement(left).parse::<i64>().unwrap();
-                let rhs = self.evaluate_statement(right).parse::<i64>().unwrap();
-                format!("{}", lhs / rhs)
-            }
-            AstKind::Mul(left, right) => {
-                let lhs = self.evaluate_statement(left).parse::<i64>().unwrap();
-                let rhs = self.evaluate_statement(right).parse::<i64>().unwrap();
-                format!("{}", lhs * rhs)
-            }
-            AstKind::Sub(left, right) => {
-                let lhs = self.evaluate_statement(left).parse::<i64>().unwrap();
-                let rhs = self.evaluate_statement(right).parse::<i64>().unwrap();
-                format!("{}", lhs - rhs)
-            }
-            AstKind::Assign(variable, expression) => {
-                let val = self.parser.interner.resolve(variable).unwrap().to_owned();
+    pub fn get_environment(&self) -> HashMap<String, String> {
+        self.env.clone()
+    }
 
-                let value = self.evaluate_statement(expression);
+    pub fn get_ast(&self) -> Vec<AstNode> {
+        self.ast.clone()
+    }
 
-                self.env_values.insert(val, value);
-                "".to_owned()
+    fn eval_node(&mut self, node_id: AstNodeId) -> Result<String, EvalError> {
+        let node_kind = self
+            .ast
+            .get(node_id)
+            .map(|node| node.kind.clone())
+            .ok_or_else(|| EvalError::ParseError("Invalid node ID".to_string()))?;
+
+        match node_kind {
+            AstKind::Number(n) => Ok(n.to_string()),
+            AstKind::Var(name) => self
+                .env
+                .get(&name)
+                .cloned()
+                .ok_or_else(|| EvalError::UndefinedVariable(name)),
+            AstKind::RawString(s) => Ok(s),
+            AstKind::Add(l, r) => {
+                let lhs = self.eval_node(l)?;
+                let rhs = self.eval_node(r)?;
+
+                let lhs_val = lhs.parse::<i64>().map_err(|_| {
+                    EvalError::ParseError(format!("Cannot parse '{}' as number", lhs))
+                })?;
+
+                let rhs_val = rhs.parse::<i64>().map_err(|_| {
+                    EvalError::ParseError(format!("Cannot parse '{}' as number", rhs))
+                })?;
+
+                Ok((lhs_val + rhs_val).to_string())
             }
-            AstKind::Pow(_base, _exp) => format!("In Progress"),
-            AstKind::Print(ast_node_id) => {
-                let value = self.evaluate_statement(ast_node_id);
-                return value;
+            AstKind::Assign(name, expr_id) => {
+                if self.env.contains_key(&name) {
+                    return Err(EvalError::VariableAlreadyDefined(format!(
+                        "Variable {name} is already defined in the same scope"
+                    )));
+                }
+
+                let val = self.eval_node(expr_id)?;
+
+                self.env.insert(name, val);
+
+                Ok(String::new())
+            }
+            AstKind::Sub(l, r) => {
+                let lhs = self.eval_node(l)?;
+                let rhs = self.eval_node(r)?;
+
+                let lhs_val = lhs.parse::<i64>().map_err(|_| {
+                    EvalError::ParseError(format!("Cannot parse '{}' as number", lhs))
+                })?;
+
+                let rhs_val = rhs.parse::<i64>().map_err(|_| {
+                    EvalError::ParseError(format!("Cannot parse '{}' as number", rhs))
+                })?;
+
+                Ok((lhs_val - rhs_val).to_string())
+            }
+            AstKind::Mul(l, r) => {
+                let lhs = self.eval_node(l)?;
+                let rhs = self.eval_node(r)?;
+
+                let lhs_val = lhs.parse::<i64>().map_err(|_| {
+                    EvalError::ParseError(format!("Cannot parse '{}' as number", lhs))
+                })?;
+
+                let rhs_val = rhs.parse::<i64>().map_err(|_| {
+                    EvalError::ParseError(format!("Cannot parse '{}' as number", rhs))
+                })?;
+
+                Ok((lhs_val * rhs_val).to_string())
+            }
+            AstKind::Div(l, r) => {
+                let lhs = self.eval_node(l)?;
+                let rhs = self.eval_node(r)?;
+
+                let lhs_val = lhs.parse::<i64>().map_err(|_| {
+                    EvalError::ParseError(format!("Cannot parse '{}' as number", lhs))
+                })?;
+
+                let rhs_val = rhs.parse::<i64>().map_err(|_| {
+                    EvalError::ParseError(format!("Cannot parse '{}' as number", rhs))
+                })?;
+
+                if rhs_val == 0 {
+                    return Err(EvalError::ParseError("Division by zero".to_string()));
+                }
+
+                Ok((lhs_val / rhs_val).to_string())
+            }
+            AstKind::Pow(_, _) => Err(EvalError::NotImplemented(
+                "Pow operator not implemented yet".to_string(),
+            )),
+            AstKind::Print(expr_id) => self.eval_node(expr_id),
+            AstKind::ReAssign(var, expr_id) => {
+                if !self.env.contains_key(&var) {
+                    return Err(EvalError::UndefinedVariable(format!(
+                        "Variable {var} is undefined."
+                    )));
+                }
+
+                let val = self.eval_node(expr_id)?;
+
+                self.env.insert(var, val);
+
+                Ok(String::new())
             }
         }
     }

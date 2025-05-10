@@ -1,16 +1,14 @@
 use crate::{
-    ast::{AstKind, AstNode, AstNodeId, Symbol},
+    ast::{AstKind, AstNode, AstNodeId},
     token::Token,
 };
 
-use slotmap::SlotMap;
 use std::iter::Peekable;
-use string_interner::{StringInterner, backend::StringBackend};
 
 pub struct Parser<'a> {
     tokens: Peekable<std::vec::IntoIter<Token>>,
-    pub interner: &'a mut StringInterner<StringBackend<Symbol>>,
-    pub ast: &'a mut SlotMap<AstNodeId, AstNode>,
+    pub ast: &'a mut Vec<AstNode>,
+    pub roots: &'a mut Vec<AstNodeId>,
 }
 
 #[derive(Debug)]
@@ -22,13 +20,13 @@ pub enum ParseError {
 impl<'a> Parser<'a> {
     pub fn new(
         tokens: Vec<Token>,
-        interner: &'a mut StringInterner<StringBackend<Symbol>>,
-        ast: &'a mut SlotMap<AstNodeId, AstNode>,
+        ast: &'a mut Vec<AstNode>,
+        roots: &'a mut Vec<AstNodeId>,
     ) -> Self {
         Self {
             tokens: tokens.into_iter().peekable(),
-            interner,
             ast,
+            roots,
         }
     }
 
@@ -53,16 +51,35 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_all_statements(&mut self) -> Result<(), ParseError> {
+        while self.peek() != &Token::EOF {
+            let stmt_id = self.parse_stmt()?;
+            self.roots.push(stmt_id);
+        }
+        Ok(())
+    }
+
     pub fn parse_stmt(&mut self) -> Result<AstNodeId, ParseError> {
-        match self.peek() {
-            Token::Let => Ok(self.parse_let()?),
-            Token::Print => Ok(self.parse_print()?),
+        let node_id = match self.peek() {
+            Token::Let => self.parse_let()?,
+            Token::Print => self.parse_print()?,
+            Token::Ident(_) => {
+                if let Some(Token::Equal) = self.tokens.clone().into_iter().nth(1) {
+                    self.parse_ident()?
+                } else {
+                    let expr = self.parse_expr(0)?;
+                    self.expect(Token::Semicolon)?;
+                    expr
+                }
+            }
             _ => {
                 let expr = self.parse_expr(0)?;
                 self.expect(Token::Semicolon)?;
-                Ok(expr)
+                expr
             }
-        }
+        };
+
+        Ok(node_id)
     }
 
     fn parse_expr(&mut self, min_prec: u8) -> Result<AstNodeId, ParseError> {
@@ -77,24 +94,20 @@ impl<'a> Parser<'a> {
 
             let right = self.parse_expr(prec + 1)?;
 
-            left = self.ast.insert(match op {
-                Token::Caret => AstNode {
-                    kind: AstKind::Pow(left, right),
-                },
-                Token::Plus => AstNode {
-                    kind: AstKind::Add(left, right),
-                },
-                Token::Minus => AstNode {
-                    kind: AstKind::Sub(left, right),
-                },
-                Token::Star => AstNode {
-                    kind: AstKind::Mul(left, right),
-                },
-                Token::Slash => AstNode {
-                    kind: AstKind::Div(left, right),
-                },
-                _ => Err(ParseError::Unreachable)?,
-            })
+            let kind = match op {
+                Token::Plus => AstKind::Add(left, right),
+                Token::Minus => AstKind::Sub(left, right),
+                Token::Star => AstKind::Mul(left, right),
+                Token::Slash => AstKind::Div(left, right),
+                Token::Caret => AstKind::Pow(left, right),
+                _ => return Err(ParseError::Unreachable),
+            };
+
+            let id = self.ast.len();
+
+            self.ast.push(AstNode { kind });
+
+            left = id;
         }
 
         Ok(left)
@@ -103,8 +116,8 @@ impl<'a> Parser<'a> {
     fn parse_let(&mut self) -> Result<AstNodeId, ParseError> {
         self.expect(Token::Let)?;
 
-        let name = if let Token::Ident(name) = self.next() {
-            self.interner.get_or_intern(&name)
+        let name = if let Token::Ident(s) = self.next() {
+            s
         } else {
             return Err(ParseError::UnexpectedToken(format!(
                 "Unexpected identifier after let found, {:?}",
@@ -117,23 +130,31 @@ impl<'a> Parser<'a> {
         let expression = self.parse_expr(0)?;
         self.expect(Token::Semicolon)?;
 
-        Ok(self.ast.insert(AstNode {
+        let id = self.ast.len();
+        self.ast.push(AstNode {
             kind: AstKind::Assign(name, expression),
-        }))
+        });
+
+        Ok(id)
     }
 
     fn parse_primary(&mut self) -> Result<AstNodeId, ParseError> {
         match self.next() {
             Token::Number(n) => {
-                return Ok(self.ast.insert(AstNode {
+                let id = self.ast.len();
+                self.ast.push(AstNode {
                     kind: AstKind::Number(n),
-                }));
+                });
+
+                Ok(id)
             }
             Token::Ident(name) => {
-                let sym = self.interner.get_or_intern(&name);
-                Ok(self.ast.insert(AstNode {
-                    kind: AstKind::Var(sym),
-                }))
+                let id = self.ast.len();
+                self.ast.push(AstNode {
+                    kind: AstKind::Var(name),
+                });
+
+                Ok(id)
             }
             Token::LParen => {
                 let expr = self.parse_expr(0)?;
@@ -141,10 +162,12 @@ impl<'a> Parser<'a> {
                 Ok(expr)
             }
             Token::RawString(raw) => {
-                let sym = self.interner.get_or_intern(raw);
-                Ok(self.ast.insert(AstNode {
-                    kind: AstKind::RawString(sym),
-                }))
+                let id = self.ast.len();
+                self.ast.push(AstNode {
+                    kind: AstKind::RawString(raw),
+                });
+
+                Ok(id)
             }
             t => Err(ParseError::UnexpectedToken(format!(
                 "Unexpected token in expression: {:?}",
@@ -162,12 +185,10 @@ impl<'a> Parser<'a> {
                 println!("{pad}Number({n})");
             }
             AstKind::Var(sym) => {
-                let name = self.interner.resolve(*sym).unwrap();
-                println!("{pad}Var({name})");
+                println!("{pad}Var({sym})");
             }
             AstKind::Assign(sym, rhs) => {
-                let name = self.interner.resolve(*sym).unwrap();
-                println!("{pad}Assign({name})");
+                println!("{pad}Assign({sym})");
                 self.print_ast(*rhs, indent + 1);
             }
             AstKind::Add(lhs, rhs) => {
@@ -196,13 +217,15 @@ impl<'a> Parser<'a> {
                 self.print_ast(*rhs, indent + 1);
             }
             AstKind::RawString(sym) => {
-                let string = self.interner.resolve(*sym).unwrap();
-
-                println!("{pad}RawString({string})");
+                println!("{pad}RawString({sym})");
             }
             AstKind::Print(ast) => {
                 println!("{pad}Print");
                 self.print_ast(*ast, indent + 1);
+            }
+            AstKind::ReAssign(sym, rhs) => {
+                println!("{pad}Reassign({sym})");
+                self.print_ast(*rhs, indent + 1);
             }
         }
     }
@@ -210,13 +233,42 @@ impl<'a> Parser<'a> {
     fn parse_print(&mut self) -> Result<AstNodeId, ParseError> {
         self.expect(Token::Print)?;
         self.expect(Token::LParen)?;
+
         let expr = self.parse_expr(0)?;
+
         self.expect(Token::RParen)?;
         self.expect(Token::Semicolon)?;
 
-        Ok(self.ast.insert(AstNode {
+        let id = self.ast.len();
+
+        self.ast.push(AstNode {
             kind: AstKind::Print(expr),
-        }))
+        });
+
+        Ok(id)
+    }
+
+    fn parse_ident(&mut self) -> Result<AstNodeId, ParseError> {
+        let name = if let Token::Ident(s) = self.next() {
+            s
+        } else {
+            return Err(ParseError::UnexpectedToken(format!(
+                "Unexpected identifier found, {:?}",
+                self.peek()
+            )));
+        };
+
+        self.expect(Token::Equal)?;
+
+        let expression = self.parse_expr(0)?;
+        self.expect(Token::Semicolon)?;
+
+        let id = self.ast.len();
+        self.ast.push(AstNode {
+            kind: AstKind::ReAssign(name, expression),
+        });
+
+        Ok(id)
     }
 }
 
