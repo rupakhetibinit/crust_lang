@@ -1,5 +1,5 @@
 use crate::{
-    ast::{AstKind, AstNode, AstNodeId},
+    ast::{AstKind, AstNode, AstNodeId, BinOp},
     token::Token,
 };
 
@@ -111,11 +111,11 @@ impl<'a> Parser<'a> {
             let right = self.parse_expr(prec + 1)?;
 
             let kind = match op {
-                Token::Plus => AstKind::Add(left, right),
-                Token::Minus => AstKind::Sub(left, right),
-                Token::Star => AstKind::Mul(left, right),
-                Token::Slash => AstKind::Div(left, right),
-                Token::Caret => AstKind::Pow(left, right),
+                Token::Plus => AstKind::BinaryExpression(left, BinOp::Add, right),
+                Token::Minus => AstKind::BinaryExpression(left, BinOp::Sub, right),
+                Token::Star => AstKind::BinaryExpression(left, BinOp::Mul, right),
+                Token::Slash => AstKind::BinaryExpression(left, BinOp::Div, right),
+                Token::Caret => AstKind::BinaryExpression(left, BinOp::Exp, right),
                 Token::EqualEqual => AstKind::Equality(left, right),
                 _ => return Err(ParseError::Unreachable),
             };
@@ -213,28 +213,22 @@ impl<'a> Parser<'a> {
                 println!("{pad}Assign({sym})");
                 self.print_ast(*rhs, indent + 1);
             }
-            AstKind::Add(lhs, rhs) => {
-                println!("{pad}Add");
+            AstKind::BinaryExpression(lhs, operator, rhs) => {
+                println!(
+                    "{pad}{}",
+                    match operator {
+                        BinOp::Add => "Add",
+                        BinOp::Sub => "Sub",
+                        BinOp::Mul => "Mul",
+                        BinOp::Div => "Div",
+                        BinOp::Exp => "Exp",
+                    }
+                );
                 self.print_ast(*lhs, indent + 1);
                 self.print_ast(*rhs, indent + 1);
             }
             AstKind::Pow(lhs, rhs) => {
                 println!("{pad}Pow");
-                self.print_ast(*lhs, indent + 1);
-                self.print_ast(*rhs, indent + 1);
-            }
-            AstKind::Div(lhs, rhs) => {
-                println!("{pad}Div");
-                self.print_ast(*lhs, indent + 1);
-                self.print_ast(*rhs, indent + 1);
-            }
-            AstKind::Mul(lhs, rhs) => {
-                println!("{pad}Mul");
-                self.print_ast(*lhs, indent + 1);
-                self.print_ast(*rhs, indent + 1);
-            }
-            AstKind::Sub(lhs, rhs) => {
-                println!("{pad}Sub");
                 self.print_ast(*lhs, indent + 1);
                 self.print_ast(*rhs, indent + 1);
             }
@@ -432,7 +426,7 @@ impl<'a> Parser<'a> {
             )));
         };
 
-        let func_id = {
+        let func_id: usize = {
             let id = self.ast.len();
             self.ast.push(AstNode {
                 kind: AstKind::Var(name.clone()),
@@ -466,7 +460,7 @@ impl<'a> Parser<'a> {
         self.ast.push(AstNode {
             kind: AstKind::FunctionCall {
                 func: func_id,
-                args: args,
+                args,
             },
         });
 
