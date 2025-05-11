@@ -43,6 +43,10 @@ impl<'a> Lexer<'a> {
                 }
                 '=' => {
                     self.input.next();
+                    if let Some('=') = self.input.peek() {
+                        self.input.next();
+                        return Token::EqualEqual;
+                    }
                     return Token::Equal;
                 }
                 '+' => {
@@ -71,6 +75,11 @@ impl<'a> Lexer<'a> {
                     return match ident.as_str() {
                         "let" => Token::Let,
                         "print" => Token::Print,
+                        "fn" => Token::Fn,
+                        "return" => Token::Return,
+                        "if" => Token::If,
+                        "else if" => Token::ElseIf,
+                        "else" => Token::Else,
                         _ => Token::Ident(ident),
                     };
                 }
@@ -110,6 +119,10 @@ impl<'a> Lexer<'a> {
                 '}' => {
                     self.input.next();
                     return Token::RBrace;
+                }
+                ',' => {
+                    self.input.next();
+                    return Token::Comma;
                 }
                 _ => return Token::EOF,
             }

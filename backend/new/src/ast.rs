@@ -8,14 +8,36 @@ pub enum AstKind {
     Number(i64),
     Var(String),
     RawString(String),
-    Add(AstNodeId, AstNodeId),
+    BinaryExpression(AstNodeId, BinOp, AstNodeId),
     Assign(String, AstNodeId),
-    ReAssign(String, AstNodeId),
+    Reassignment(String, AstNodeId),
     Pow(AstNodeId, AstNodeId),
-    Div(AstNodeId, AstNodeId),
-    Mul(AstNodeId, AstNodeId),
-    Sub(AstNodeId, AstNodeId),
     Print(AstNodeId),
+    FunctionDeclaration {
+        name: String,
+        args: Vec<String>,
+        block: Vec<AstNodeId>,
+    },
+    FunctionCall {
+        func: AstNodeId,
+        args: Vec<AstNodeId>,
+    },
+    If {
+        expression: AstNodeId,
+        block: Vec<AstNodeId>,
+        else_block: Vec<AstNodeId>,
+    },
+    Return(AstNodeId),
+    Equality(AstNodeId, AstNodeId),
+}
+
+#[derive(Debug, Clone)]
+pub enum BinOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Exp,
 }
 
 pub type AstNodeId = usize;
