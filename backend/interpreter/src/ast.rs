@@ -4,6 +4,7 @@ pub enum AstNode {
     Var(String),
     RawString(String),
     BinaryExpression(AstNodeId, BinOp, AstNodeId),
+    PostIncrement(String),
     Assign(String, AstNodeId),
     Reassignment(String, AstNodeId),
     Pow(AstNodeId, AstNodeId),
@@ -24,6 +25,13 @@ pub enum AstNode {
     },
     Return(AstNodeId),
     Equality(AstNodeId, AstNodeId),
+    Comparison(AstNodeId, ComparisonOp, AstNodeId),
+    ForLoop {
+        init: usize,
+        condition: usize,
+        increment: usize,
+        body: Vec<usize>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -33,6 +41,14 @@ pub enum BinOp {
     Mul,
     Div,
     Exp,
+}
+
+#[derive(Debug, Clone)]
+pub enum ComparisonOp {
+    LessOrEqual,
+    Less,
+    GreaterOrEqual,
+    Greater,
 }
 
 pub type AstNodeId = usize;

@@ -1,5 +1,5 @@
 use crate::{
-    ast::{AstNode, AstNodeId, BinOp},
+    ast::{AstNode, AstNodeId, BinOp, ComparisonOp},
     token::Token,
 };
 
@@ -89,6 +89,7 @@ impl<'a> Parser<'a> {
                     expr
                 }
             },
+            Token::For => self.parse_for_loop()?,
             _ => {
                 let expr = self.parse_expr(0)?;
                 self.expect(Token::Semicolon)?;
@@ -97,6 +98,35 @@ impl<'a> Parser<'a> {
         };
 
         Ok(node_id)
+    }
+
+    fn parse_for_loop(&mut self) -> Result<usize, ParseError> {
+        self.expect(Token::For)?;
+        self.expect(Token::LParen)?;
+        let ast = self.parse_let()?;
+        let condition = self.parse_expr(0)?;
+        self.expect(Token::Semicolon)?;
+        let increment = if let Ok(incr_id) = self.parse_post_increment() {
+            incr_id
+        } else {
+            self.parse_expr(0)?
+        };
+        self.expect(Token::RParen)?;
+        self.expect(Token::LBrace)?;
+        let mut body = Vec::new();
+        while !matches!(self.peek(), Token::RBrace) {
+            let stmt = self.parse_stmt()?;
+            body.push(stmt);
+        }
+        self.expect(Token::RBrace)?;
+        let id = self.ast.len();
+        self.ast.push(AstNode::ForLoop {
+            init: ast,
+            condition,
+            increment,
+            body,
+        });
+        Ok(id)
     }
 
     fn parse_expr(&mut self, min_prec: u8) -> Result<AstNodeId, ParseError> {
@@ -118,6 +148,12 @@ impl<'a> Parser<'a> {
                 Token::Slash => AstNode::BinaryExpression(left, BinOp::Div, right),
                 Token::Caret => AstNode::BinaryExpression(left, BinOp::Exp, right),
                 Token::EqualEqual => AstNode::Equality(left, right),
+                Token::LessThan => AstNode::Comparison(left, ComparisonOp::LessOrEqual, right),
+                Token::GreaterThan => {
+                    AstNode::Comparison(left, ComparisonOp::GreaterOrEqual, right)
+                }
+                Token::Less => AstNode::Comparison(left, ComparisonOp::Less, right),
+                Token::Greater => AstNode::Comparison(left, ComparisonOp::Greater, right),
                 _ => return Err(ParseError::Unreachable),
             };
 
@@ -250,6 +286,14 @@ impl<'a> Parser<'a> {
             AstNode::Return(_) => todo!(),
             AstNode::If { .. } => todo!(),
             AstNode::Equality(_, _) => todo!(),
+            AstNode::ForLoop {
+                init: _,
+                condition: _,
+                increment: _,
+                body: _,
+            } => todo!(),
+            AstNode::PostIncrement(_) => todo!(),
+            AstNode::Comparison(_, _comparison_op, _) => todo!(),
         }
     }
 
@@ -458,13 +502,35 @@ impl<'a> Parser<'a> {
 
         Ok(call_id)
     }
+
+    fn parse_post_increment(&mut self) -> Result<AstNodeId, ParseError> {
+        let Token::Ident(name) = self.next() else {
+            return Err(ParseError::UnexpectedToken(format!(
+                "Expected identifier for post increment, got {:?}",
+                self.peek()
+            )));
+        };
+
+        self.expect(Token::Increment)?;
+
+        let id = self.ast.len();
+
+        self.ast.push(AstNode::PostIncrement(name.clone()));
+
+        Ok(id)
+    }
 }
 
 fn precedence(op: &Token) -> Option<u8> {
     match op {
         Token::Star | Token::Slash => Some(2),
         Token::Plus | Token::Minus => Some(1),
-        Token::EqualEqual | Token::Return => Some(0),
+        Token::EqualEqual
+        | Token::Return
+        | Token::Less
+        | Token::Greater
+        | Token::GreaterThan
+        | Token::LessThan => Some(0),
         _ => None,
     }
 }

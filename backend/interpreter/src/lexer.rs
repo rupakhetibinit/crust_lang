@@ -51,6 +51,10 @@ impl<'a> Lexer<'a> {
                 }
                 '+' => {
                     self.input.next();
+                    if self.input.peek() == Some(&'+') {
+                        self.input.next();
+                        return Token::Increment;
+                    }
                     return Token::Plus;
                 }
                 '-' => {
@@ -80,6 +84,7 @@ impl<'a> Lexer<'a> {
                         "if" => Token::If,
                         "else if" => Token::ElseIf,
                         "else" => Token::Else,
+                        "for" => Token::For,
                         _ => Token::Ident(ident),
                     };
                 }
@@ -123,6 +128,22 @@ impl<'a> Lexer<'a> {
                 ',' => {
                     self.input.next();
                     return Token::Comma;
+                }
+                '<' => {
+                    self.input.next();
+                    if let Some('=') = self.input.peek() {
+                        self.input.next();
+                        return Token::LessThan;
+                    }
+                    return Token::Less;
+                }
+                '>' => {
+                    self.input.next();
+                    if let Some('=') = self.input.peek() {
+                        self.input.next();
+                        return Token::GreaterThan;
+                    }
+                    return Token::Greater;
                 }
                 _ => return Token::EOF,
             }

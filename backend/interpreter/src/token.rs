@@ -24,4 +24,10 @@ pub enum Token {
     If,
     Else,
     EqualEqual,
+    For,
+    Increment,
+    LessThan,
+    Less,
+    GreaterThan,
+    Greater,
 }

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ast::{AstNode, AstNodeId, BinOp};
+use crate::ast::{AstNode, AstNodeId, BinOp, ComparisonOp};
 
 #[derive(Debug)]
 pub struct Interpreter {
@@ -310,6 +310,68 @@ impl Interpreter {
                     (_, _) => EvalOutcome::Value(Value::Unit),
                 });
             }
+            AstNode::ForLoop {
+                init,
+                condition,
+                increment,
+                body,
+            } => {
+                let init_value = self.eval_node(init)?;
+                if let EvalOutcome::Value(Value::Unit) = init_value {
+                } else {
+                    return Err(EvalError::ParseError(
+                        "For loop initialization did not evaluate to a unit".into(),
+                    ));
+                }
+
+                let mut result = EvalOutcome::Value(Value::Unit);
+
+                while let EvalOutcome::Value(Value::Boolean(true)) = self.eval_node(condition)? {
+                    for &stmt_id in &body {
+                        match self.eval_node(stmt_id)? {
+                            EvalOutcome::Value(_) => continue,
+                            EvalOutcome::Return(val) => {
+                                result = EvalOutcome::Return(val);
+                                break;
+                            }
+                        }
+                    }
+
+                    if let EvalOutcome::Return(_) = result {
+                        break;
+                    }
+
+                    self.eval_node(increment)?;
+                }
+
+                Ok(result)
+            }
+            AstNode::PostIncrement(increment) => {
+                if let Some(EvalOutcome::Value(Value::Int(mut value))) =
+                    self.get_environment().get(&increment).cloned()
+                {
+                    value += 1;
+                    self.current_env_mut()
+                        .insert(increment, EvalOutcome::Value(Value::Int(value)));
+                    Ok(EvalOutcome::Value(Value::Int(value - 1)))
+                } else {
+                    Err(EvalError::UndefinedVariable(increment))
+                }
+            }
+            AstNode::Comparison(x, op, y) => match (self.eval_node(x)?, self.eval_node(y)?) {
+                (EvalOutcome::Value(Value::Int(lhs)), EvalOutcome::Value(Value::Int(rhs))) => {
+                    let result = match op {
+                        ComparisonOp::LessOrEqual => lhs <= rhs,
+                        ComparisonOp::Less => lhs < rhs,
+                        ComparisonOp::GreaterOrEqual => lhs >= rhs,
+                        ComparisonOp::Greater => lhs > rhs,
+                    };
+                    Ok(EvalOutcome::Value(Value::Boolean(result)))
+                }
+                _ => Err(EvalError::ParseError(
+                    "Comparison does not evaluate to boolean".into(),
+                )),
+            },
         }
     }
 }
