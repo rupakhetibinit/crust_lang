@@ -97,4 +97,8 @@ impl Crust {
 
         self.execute_line(&src);
     }
+
+    pub fn run_line(&mut self, code: &str) {
+        self.execute_line(code);
+    }
 }

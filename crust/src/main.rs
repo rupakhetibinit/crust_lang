@@ -1,6 +1,6 @@
 use std::env;
 
-use new::crust::Crust;
+use interpreter::crust::Crust;
 
 fn main() {
     let mut crust = Crust::new();
