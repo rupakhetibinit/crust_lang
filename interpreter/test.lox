@@ -1,7 +1,0 @@
-// this is a comment
-// comment
-(( 1 + 2 )) // grouping stuff
-!*+-/=<> <= >= == // operators
-"string support"
-"unterminated string"
-"numbers baby" 1234.55, 124, 1234123

@@ -1,14 +1,14 @@
 use criterion::{Criterion, criterion_group, criterion_main};
-use old::lox::Lox;
+use interpreter::crust::Crust;
 pub fn criterion_benchmark(c: &mut Criterion) {
-    c.bench_function("SlotMap interpreter", |b| {
+    c.bench_function("Crust Interpreter", |b| {
         b.iter(|| {
-            let lox = Lox::new();
+            let mut crust = Crust::new();
 
             let input = "1 + 2 + 3 * 4 * 55 * 66 * 77;".to_string();
 
-            _ = lox.run(&input);
-        })
+            crust.run_line(&input);
+        });
     });
 }
 

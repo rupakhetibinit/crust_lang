@@ -1,11 +1,10 @@
 [package]
-name = "interpreter"
+name = "crust"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-old = { path = "../backend/old" }
-new = { path = "../backend/new" }
+interpreter = { path = "../backend/interpreter" }
 clap = { version = "*" }
 
 [dev-dependencies]

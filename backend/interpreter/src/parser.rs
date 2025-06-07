@@ -38,6 +38,7 @@ impl<'a> Parser<'a> {
         self.tokens.clone().nth(n)
     }
 
+    #[allow(unused)]
     fn peek_two(&self) -> (Option<Token>, Option<Token>) {
         (self.peek_nth(0), self.peek_nth(1))
     }
@@ -243,14 +244,17 @@ impl<'a> Parser<'a> {
                 println!("{pad}Reassign({sym})");
                 self.print_ast(*rhs, indent + 1);
             }
-            AstKind::FunctionDeclaration { name, args, block } => todo!(),
-            AstKind::FunctionCall { func, args } => todo!(),
+            AstKind::FunctionDeclaration { name, args, block } => {
+                println!("{pad}Function({name}, args: ({}))", args.join(","));
+                for b in block {
+                    self.print_ast(*b, indent);
+                }
+            }
+            AstKind::FunctionCall { .. } => {
+                // println!("{pad}Call {func} ({})", args.to_vec().join(","));
+            }
             AstKind::Return(_) => todo!(),
-            AstKind::If {
-                expression,
-                block,
-                else_block,
-            } => todo!(),
+            AstKind::If { .. } => todo!(),
             AstKind::Equality(_, _) => todo!(),
         }
     }
