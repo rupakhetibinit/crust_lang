@@ -7,7 +7,7 @@ pub enum AstNode {
     Assign(String, AstNodeId),
     Reassignment(String, AstNodeId),
     Pow(AstNodeId, AstNodeId),
-    Print(AstNodeId),
+    Print(Vec<AstNodeId>),
     FunctionDeclaration {
         name: String,
         args: Vec<String>,

@@ -1,5 +1,5 @@
 # Where should we write the GIF?
-Output demo2.gif
+Output ./demo/output/demo2.gif
 
 Set FontSize 25
 Set Width 1600

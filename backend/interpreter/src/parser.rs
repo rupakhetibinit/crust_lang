@@ -230,7 +230,9 @@ impl<'a> Parser<'a> {
             }
             AstNode::Print(ast) => {
                 println!("{pad}Print");
-                self.print_ast(*ast, indent + 1);
+                for a in ast {
+                    self.print_ast(*a, indent + 1);
+                }
             }
             AstNode::Reassignment(sym, rhs) => {
                 println!("{pad}Reassign({sym})");
@@ -255,14 +257,22 @@ impl<'a> Parser<'a> {
         self.expect(Token::Print)?;
         self.expect(Token::LParen)?;
 
+        let mut exprs = Vec::<AstNodeId>::new();
         let expr = self.parse_expr(0)?;
+        exprs.push(expr);
+
+        while matches!(self.peek(), Token::Comma) {
+            self.next();
+            let expr = self.parse_expr(0)?;
+            exprs.push(expr);
+        }
 
         self.expect(Token::RParen)?;
         self.expect(Token::Semicolon)?;
 
         let id = self.ast.len();
 
-        self.ast.push(AstNode::Print(expr));
+        self.ast.push(AstNode::Print(exprs));
 
         Ok(id)
     }

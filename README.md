@@ -8,4 +8,5 @@ A language written in the Rust Programming Language.
 
 # Basic Demo
 
-<img src="demo.gif">
+<img src="demo/output/demo.gif">
+<img src="demo/output/recursion.gif">

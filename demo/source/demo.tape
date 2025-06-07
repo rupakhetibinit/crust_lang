@@ -1,5 +1,5 @@
 # Where should we write the GIF?
-Output demo.gif
+Output ./demo/output/demo.gif
 
 # Set up a 1200x600 terminal with 46px font.
 Set FontSize 30

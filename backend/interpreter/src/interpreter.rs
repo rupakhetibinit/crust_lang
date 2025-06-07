@@ -149,18 +149,25 @@ impl Interpreter {
             AstNode::Pow(_, _) => Err(EvalError::NotImplemented(
                 "Pow operator not implemented yet".to_string(),
             )),
-            AstNode::Print(expr_id) => {
-                let value = self.eval_node(expr_id)?;
+            AstNode::Print(exprs) => {
+                use std::fmt::Write;
+                let mut output_string = String::new();
+                for expr in exprs {
+                    let value = self.eval_node(expr)?;
 
-                match value {
-                    EvalOutcome::Value(value) | EvalOutcome::Return(value) => match value {
-                        Value::Unit => {}
-                        Value::Float(x) => println!("{}", x),
-                        Value::Int(x) => println!("{}", x),
-                        Value::String(x) => println!("{}", x),
-                        Value::Boolean(bool) => println!("{}", bool.to_string()),
-                    },
+                    match value {
+                        EvalOutcome::Value(value) | EvalOutcome::Return(value) => match value {
+                            Value::Unit => {}
+                            Value::Float(x) => write!(output_string, "{}", x).unwrap(),
+                            Value::Int(x) => write!(output_string, "{}", x).unwrap(),
+                            Value::String(x) => write!(output_string, "{}", x).unwrap(),
+                            Value::Boolean(bool) => {
+                                write!(output_string, "{}", bool.to_string()).unwrap()
+                            }
+                        },
+                    }
                 }
+                println!("{}", output_string);
 
                 Ok(EvalOutcome::Value(Value::Unit))
             }
