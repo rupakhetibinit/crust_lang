@@ -1,5 +1,5 @@
 use crate::{
-    ast::{AstKind, AstNode, AstNodeId, BinOp},
+    ast::{AstNode, AstNodeId, BinOp},
     token::Token,
 };
 
@@ -111,19 +111,19 @@ impl<'a> Parser<'a> {
 
             let right = self.parse_expr(prec + 1)?;
 
-            let kind = match op {
-                Token::Plus => AstKind::BinaryExpression(left, BinOp::Add, right),
-                Token::Minus => AstKind::BinaryExpression(left, BinOp::Sub, right),
-                Token::Star => AstKind::BinaryExpression(left, BinOp::Mul, right),
-                Token::Slash => AstKind::BinaryExpression(left, BinOp::Div, right),
-                Token::Caret => AstKind::BinaryExpression(left, BinOp::Exp, right),
-                Token::EqualEqual => AstKind::Equality(left, right),
+            let node = match op {
+                Token::Plus => AstNode::BinaryExpression(left, BinOp::Add, right),
+                Token::Minus => AstNode::BinaryExpression(left, BinOp::Sub, right),
+                Token::Star => AstNode::BinaryExpression(left, BinOp::Mul, right),
+                Token::Slash => AstNode::BinaryExpression(left, BinOp::Div, right),
+                Token::Caret => AstNode::BinaryExpression(left, BinOp::Exp, right),
+                Token::EqualEqual => AstNode::Equality(left, right),
                 _ => return Err(ParseError::Unreachable),
             };
 
             let id = self.ast.len();
 
-            self.ast.push(AstNode { kind });
+            self.ast.push(node);
 
             left = id;
         }
@@ -149,9 +149,7 @@ impl<'a> Parser<'a> {
         self.expect(Token::Semicolon)?;
 
         let id = self.ast.len();
-        self.ast.push(AstNode {
-            kind: AstKind::Assign(name, expression),
-        });
+        self.ast.push(AstNode::Assign(name, expression));
 
         Ok(id)
     }
@@ -165,17 +163,13 @@ impl<'a> Parser<'a> {
         match self.next() {
             Token::Number(n) => {
                 let id = self.ast.len();
-                self.ast.push(AstNode {
-                    kind: AstKind::Number(n),
-                });
+                self.ast.push(AstNode::Number(n));
 
                 Ok(id)
             }
             Token::Ident(name) => {
                 let id = self.ast.len();
-                self.ast.push(AstNode {
-                    kind: AstKind::Var(name),
-                });
+                self.ast.push(AstNode::Var(name));
 
                 Ok(id)
             }
@@ -186,9 +180,7 @@ impl<'a> Parser<'a> {
             }
             Token::RawString(raw) => {
                 let id = self.ast.len();
-                self.ast.push(AstNode {
-                    kind: AstKind::RawString(raw),
-                });
+                self.ast.push(AstNode::RawString(raw));
 
                 Ok(id)
             }
@@ -203,18 +195,18 @@ impl<'a> Parser<'a> {
         let pad = "  ".repeat(indent);
         let node = &self.ast[root];
 
-        match &node.kind {
-            AstKind::Number(n) => {
+        match &node {
+            AstNode::Number(n) => {
                 println!("{pad}Number({n})");
             }
-            AstKind::Var(sym) => {
+            AstNode::Var(sym) => {
                 println!("{pad}Var({sym})");
             }
-            AstKind::Assign(sym, rhs) => {
+            AstNode::Assign(sym, rhs) => {
                 println!("{pad}Assign({sym})");
                 self.print_ast(*rhs, indent + 1);
             }
-            AstKind::BinaryExpression(lhs, operator, rhs) => {
+            AstNode::BinaryExpression(lhs, operator, rhs) => {
                 println!(
                     "{pad}{}",
                     match operator {
@@ -228,34 +220,34 @@ impl<'a> Parser<'a> {
                 self.print_ast(*lhs, indent + 1);
                 self.print_ast(*rhs, indent + 1);
             }
-            AstKind::Pow(lhs, rhs) => {
+            AstNode::Pow(lhs, rhs) => {
                 println!("{pad}Pow");
                 self.print_ast(*lhs, indent + 1);
                 self.print_ast(*rhs, indent + 1);
             }
-            AstKind::RawString(sym) => {
+            AstNode::RawString(sym) => {
                 println!("{pad}RawString({sym})");
             }
-            AstKind::Print(ast) => {
+            AstNode::Print(ast) => {
                 println!("{pad}Print");
                 self.print_ast(*ast, indent + 1);
             }
-            AstKind::Reassignment(sym, rhs) => {
+            AstNode::Reassignment(sym, rhs) => {
                 println!("{pad}Reassign({sym})");
                 self.print_ast(*rhs, indent + 1);
             }
-            AstKind::FunctionDeclaration { name, args, block } => {
+            AstNode::FunctionDeclaration { name, args, block } => {
                 println!("{pad}Function({name}, args: ({}))", args.join(","));
                 for b in block {
                     self.print_ast(*b, indent);
                 }
             }
-            AstKind::FunctionCall { .. } => {
+            AstNode::FunctionCall { .. } => {
                 // println!("{pad}Call {func} ({})", args.to_vec().join(","));
             }
-            AstKind::Return(_) => todo!(),
-            AstKind::If { .. } => todo!(),
-            AstKind::Equality(_, _) => todo!(),
+            AstNode::Return(_) => todo!(),
+            AstNode::If { .. } => todo!(),
+            AstNode::Equality(_, _) => todo!(),
         }
     }
 
@@ -270,9 +262,7 @@ impl<'a> Parser<'a> {
 
         let id = self.ast.len();
 
-        self.ast.push(AstNode {
-            kind: AstKind::Print(expr),
-        });
+        self.ast.push(AstNode::Print(expr));
 
         Ok(id)
     }
@@ -293,9 +283,7 @@ impl<'a> Parser<'a> {
         self.expect(Token::Semicolon)?;
 
         let id = self.ast.len();
-        self.ast.push(AstNode {
-            kind: AstKind::Reassignment(name, expression),
-        });
+        self.ast.push(AstNode::Reassignment(name, expression));
 
         Ok(id)
     }
@@ -342,12 +330,10 @@ impl<'a> Parser<'a> {
 
         let id = self.ast.len();
 
-        let node = AstNode {
-            kind: AstKind::FunctionDeclaration {
-                name,
-                args,
-                block: body,
-            },
+        let node = AstNode::FunctionDeclaration {
+            name,
+            args,
+            block: body,
         };
 
         self.ast.push(node);
@@ -389,12 +375,10 @@ impl<'a> Parser<'a> {
 
         let id = self.ast.len();
 
-        let node = AstNode {
-            kind: AstKind::If {
-                expression,
-                block: body,
-                else_block,
-            },
+        let node = AstNode::If {
+            expression,
+            block: body,
+            else_block,
         };
 
         self.ast.push(node);
@@ -411,9 +395,7 @@ impl<'a> Parser<'a> {
 
         let id = self.ast.len();
 
-        let node = AstNode {
-            kind: AstKind::Return(expr),
-        };
+        let node = AstNode::Return(expr);
 
         self.ast.push(node);
 
@@ -432,9 +414,7 @@ impl<'a> Parser<'a> {
 
         let func_id: usize = {
             let id = self.ast.len();
-            self.ast.push(AstNode {
-                kind: AstKind::Var(name.clone()),
-            });
+            self.ast.push(AstNode::Var(name.clone()));
             id
         };
 
@@ -461,11 +441,9 @@ impl<'a> Parser<'a> {
 
         let call_id = self.ast.len();
 
-        self.ast.push(AstNode {
-            kind: AstKind::FunctionCall {
-                func: func_id,
-                args,
-            },
+        self.ast.push(AstNode::FunctionCall {
+            func: func_id,
+            args,
         });
 
         Ok(call_id)

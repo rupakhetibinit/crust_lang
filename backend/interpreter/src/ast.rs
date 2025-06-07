@@ -1,10 +1,5 @@
 #[derive(Debug, Clone)]
-pub struct AstNode {
-    pub kind: AstKind,
-}
-
-#[derive(Debug, Clone)]
-pub enum AstKind {
+pub enum AstNode {
     Number(i64),
     Var(String),
     RawString(String),

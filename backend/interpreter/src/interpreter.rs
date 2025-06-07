@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ast::{AstKind, AstNode, AstNodeId, BinOp};
+use crate::ast::{AstNode, AstNodeId, BinOp};
 
 #[derive(Debug)]
 pub struct Interpreter {
@@ -96,18 +96,18 @@ impl Interpreter {
         let node_kind = self
             .ast
             .get(node_id)
-            .map(|node| node.kind.clone())
+            .map(|node| node.clone())
             .ok_or_else(|| EvalError::ParseError("Invalid node ID".to_string()))?;
 
         match node_kind {
-            AstKind::Number(n) => Ok(EvalOutcome::Value(Value::Int(n))),
-            AstKind::Var(name) => self
+            AstNode::Number(n) => Ok(EvalOutcome::Value(Value::Int(n))),
+            AstNode::Var(name) => self
                 .get_environment()
                 .get(&name)
                 .cloned()
                 .ok_or_else(|| EvalError::UndefinedVariable(name)),
-            AstKind::RawString(s) => Ok(EvalOutcome::Value(Value::String(s))),
-            AstKind::BinaryExpression(l, operator, r) => {
+            AstNode::RawString(s) => Ok(EvalOutcome::Value(Value::String(s))),
+            AstNode::BinaryExpression(l, operator, r) => {
                 let lhs = self.eval_node(l)?;
                 let rhs = self.eval_node(r)?;
 
@@ -133,7 +133,7 @@ impl Interpreter {
                     (_, _) => return Ok(EvalOutcome::Value(Value::Unit)),
                 }
             }
-            AstKind::Assign(name, expr_id) => {
+            AstNode::Assign(name, expr_id) => {
                 if self.get_environment().contains_key(&name) {
                     return Err(EvalError::VariableAlreadyDefined(format!(
                         "Variable {name} is already defined in the same scope"
@@ -146,10 +146,10 @@ impl Interpreter {
 
                 Ok(EvalOutcome::Value(Value::Unit))
             }
-            AstKind::Pow(_, _) => Err(EvalError::NotImplemented(
+            AstNode::Pow(_, _) => Err(EvalError::NotImplemented(
                 "Pow operator not implemented yet".to_string(),
             )),
-            AstKind::Print(expr_id) => {
+            AstNode::Print(expr_id) => {
                 let value = self.eval_node(expr_id)?;
 
                 match value {
@@ -164,7 +164,7 @@ impl Interpreter {
 
                 Ok(EvalOutcome::Value(Value::Unit))
             }
-            AstKind::Reassignment(var, expr_id) => {
+            AstNode::Reassignment(var, expr_id) => {
                 if !self.get_environment().contains_key(&var) {
                     return Err(EvalError::UndefinedVariable(format!(
                         "Variable {var} is undefined."
@@ -177,7 +177,7 @@ impl Interpreter {
 
                 Ok(EvalOutcome::Value(Value::Unit))
             }
-            AstKind::FunctionDeclaration { name, args, block } => {
+            AstNode::FunctionDeclaration { name, args, block } => {
                 self.functions.insert(
                     name,
                     Function {
@@ -188,9 +188,9 @@ impl Interpreter {
 
                 Ok(EvalOutcome::Value(Value::Unit))
             }
-            AstKind::FunctionCall { func, args } => {
-                let fn_name = match &self.ast[func].kind {
-                    AstKind::Var(name) => name.as_str(),
+            AstNode::FunctionCall { func, args } => {
+                let fn_name = match &self.ast[func] {
+                    AstNode::Var(name) => name.as_str(),
                     other => panic!("Cannot call non-function value: {:?}", other),
                 };
 
@@ -242,7 +242,7 @@ impl Interpreter {
 
                 Ok(EvalOutcome::Value(return_value))
             }
-            AstKind::Return(x) => {
+            AstNode::Return(x) => {
                 let v = match self.eval_node(x)? {
                     EvalOutcome::Value(v) => v,
                     EvalOutcome::Return(inner) => {
@@ -251,7 +251,7 @@ impl Interpreter {
                 };
                 Ok(EvalOutcome::Return(v))
             }
-            AstKind::If {
+            AstNode::If {
                 expression,
                 block,
                 else_block,
@@ -282,7 +282,7 @@ impl Interpreter {
 
                 Ok(result)
             }
-            AstKind::Equality(x, y) => {
+            AstNode::Equality(x, y) => {
                 let lhs = self.eval_node(x)?;
                 let rhs = self.eval_node(y)?;
 
