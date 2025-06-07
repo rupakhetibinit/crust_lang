@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 interpreter = { path = "../backend/interpreter" }
-clap = { version = "*" }
+clap = { version = "4.5.39", features = ["derive"] }
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
