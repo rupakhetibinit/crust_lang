@@ -90,6 +90,23 @@ impl<'a> Parser<'a> {
                 }
             },
             Token::For => self.parse_for_loop()?,
+            Token::LBrace => {
+                self.next();
+
+                let mut block_items = Vec::new();
+
+                while !matches!(self.peek(), Token::RBrace) {
+                    let stmt = self.parse_stmt()?;
+                    block_items.push(stmt);
+                }
+                self.expect(Token::RBrace)?;
+
+                let block_id = self.ast.len();
+
+                self.ast.push(AstNode::Block(block_items));
+
+                block_id
+            }
             _ => {
                 let expr = self.parse_expr(0)?;
                 self.expect(Token::Semicolon)?;
@@ -298,6 +315,7 @@ impl<'a> Parser<'a> {
             } => todo!(),
             AstNode::PostIncrement(_) => todo!(),
             AstNode::Comparison(_, _comparison_op, _) => todo!(),
+            AstNode::Block(items) => todo!(),
         }
     }
 

@@ -67,6 +67,11 @@ impl<'a> Lexer<'a> {
                 }
                 '/' => {
                     self.input.next();
+                    if self.input.peek() == Some(&'/') {
+                        self.input.next();
+                        self.consume_while(|c| c != '\n');
+                        continue;
+                    }
                     return Token::Slash;
                 }
                 '%' => {

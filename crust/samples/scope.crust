@@ -1,0 +1,27 @@
+let a = 1;
+let b = "outer";
+
+{
+    let a = 2;
+    let b = "middle";
+
+    print("a in middle:", a); // 2
+    print("b in middle:", b); // "middle"
+
+    {
+        let a = 3;
+        b = "shadowed from inner";
+        let c = "new var";
+
+        print("a in inner:", a); // 3
+        print("b in inner:", b); // "shadowed from inner"
+        print("c in inner:", c); // "new var"
+    }
+
+    print("a after inner:", a); // 2
+    print("b after inner:", b); // "shadowed from inner"
+    print("C should error here", c);
+}
+
+print("a outside:", a); // 1
+print("b outside:", b); // "outer"

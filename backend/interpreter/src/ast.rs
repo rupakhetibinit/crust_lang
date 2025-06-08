@@ -18,6 +18,7 @@ pub enum AstNode {
         func: AstNodeId,
         args: Vec<AstNodeId>,
     },
+    Block(Vec<AstNodeId>),
     If {
         expression: AstNodeId,
         block: Vec<AstNodeId>,

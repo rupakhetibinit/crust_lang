@@ -24,6 +24,7 @@ pub enum EvalError {
     VariableAlreadyDefined(String),
     UndefinedFunction(String),
     InvalidFunctionArguments(String),
+    StackOverflow(String),
 }
 
 #[derive(Debug, Clone)]
@@ -88,6 +89,15 @@ impl Interpreter {
         self.env_stack.last().unwrap().clone()
     }
 
+    pub fn lookup_variable(&self, name: &str) -> Option<EvalOutcome> {
+        for env in self.env_stack.iter().rev() {
+            if let Some(value) = env.get(name) {
+                return Some(value.clone());
+            }
+        }
+        None
+    }
+
     pub fn get_ast(&self) -> Vec<AstNode> {
         self.ast.clone()
     }
@@ -102,10 +112,8 @@ impl Interpreter {
         match node_kind {
             AstNode::Number(n) => Ok(EvalOutcome::Value(Value::Int(n))),
             AstNode::Var(name) => self
-                .get_environment()
-                .get(&name)
-                .cloned()
-                .ok_or_else(|| EvalError::UndefinedVariable(name)),
+                .lookup_variable(&name)
+                .ok_or_else(|| EvalError::UndefinedVariable(name.clone())),
             AstNode::RawString(s) => Ok(EvalOutcome::Value(Value::String(s))),
             AstNode::BinaryExpression(l, operator, r) => {
                 let lhs = self.eval_node(l)?;
@@ -172,15 +180,9 @@ impl Interpreter {
                 Ok(EvalOutcome::Value(Value::Unit))
             }
             AstNode::Reassignment(var, expr_id) => {
-                if !self.get_environment().contains_key(&var) {
-                    return Err(EvalError::UndefinedVariable(format!(
-                        "Variable {var} is undefined."
-                    )));
-                }
-
                 let val = self.eval_node(expr_id)?;
 
-                self.current_env_mut().insert(var, val);
+                self.reassign_variable(&var, val)?;
 
                 Ok(EvalOutcome::Value(Value::Unit))
             }
@@ -225,15 +227,21 @@ impl Interpreter {
                     )));
                 }
 
-                self.env_stack.push(HashMap::new());
-                {
-                    let local = self.env_stack.last_mut().unwrap();
-                    for (param, value) in params.iter().zip(arg_values) {
-                        local.insert(param.clone(), value);
-                    }
-                }
+                self.env_stack.push(
+                    params
+                        .iter()
+                        .zip(arg_values.clone())
+                        .map(|(param, value)| (param.clone(), value))
+                        .collect(),
+                );
 
                 let mut return_value = Value::Unit;
+
+                if self.env_stack.len() > 100 {
+                    return Err(EvalError::StackOverflow(
+                        "Maximum stack depth exceeded".into(),
+                    ));
+                }
 
                 for &stmt_id in &body {
                     match self.eval_node(stmt_id)? {
@@ -339,6 +347,8 @@ impl Interpreter {
                 increment,
                 body,
             } => {
+                self.env_stack.push(HashMap::new());
+
                 let init_value = self.eval_node(init)?;
                 if let EvalOutcome::Value(Value::Unit) = init_value {
                 } else {
@@ -366,6 +376,8 @@ impl Interpreter {
 
                     self.eval_node(increment)?;
                 }
+
+                self.env_stack.pop();
 
                 Ok(result)
             }
@@ -410,6 +422,39 @@ impl Interpreter {
                     "Comparison does not evaluate to boolean parse error".into(),
                 )),
             },
+            AstNode::Block(items) => {
+                self.env_stack.push(HashMap::new());
+
+                let mut result = EvalOutcome::Value(Value::Unit);
+
+                for &item in &items {
+                    match self.eval_node(item)? {
+                        EvalOutcome::Value(_) => continue,
+                        EvalOutcome::Return(val) => {
+                            result = EvalOutcome::Return(val);
+                            break;
+                        }
+                    }
+                }
+
+                self.env_stack.pop();
+
+                Ok(result)
+            }
         }
+    }
+
+    fn reassign_variable(&mut self, var: &str, val: EvalOutcome) -> Result<(), EvalError> {
+        for env in self.env_stack.iter_mut().rev() {
+            if env.contains_key(var) {
+                env.insert(var.to_string(), val);
+                return Ok(());
+            }
+        }
+
+        Err(EvalError::UndefinedVariable(format!(
+            "Variable {} is not defined in scope",
+            var
+        )))
     }
 }
