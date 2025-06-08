@@ -66,6 +66,16 @@ impl Interpreter {
         }
     }
 
+    fn with_new_scope<F>(&mut self, f: F) -> Result<EvalOutcome, EvalError>
+    where
+        F: FnOnce(&mut Interpreter) -> Result<EvalOutcome, EvalError>,
+    {
+        self.env_stack.push(HashMap::new());
+        let result = f(self);
+        self.env_stack.pop();
+        result
+    }
+
     pub fn run(&mut self) -> Result<(), EvalError> {
         let roots = self.roots.clone();
         for stmt in roots {
@@ -150,7 +160,16 @@ impl Interpreter {
             AstNode::Assign(name, expr_id) => {
                 let val = self.eval_node(expr_id)?;
 
-                self.current_env_mut().insert(name, val);
+                let current_env = self.current_env_mut();
+
+                if current_env.contains_key(&name) {
+                    return Err(EvalError::VariableAlreadyDefined(format!(
+                        "Variable {} is already defined in current scope",
+                        name
+                    )));
+                };
+
+                current_env.insert(name, val);
 
                 Ok(EvalOutcome::Value(Value::Unit))
             }
@@ -227,35 +246,35 @@ impl Interpreter {
                     )));
                 }
 
-                self.env_stack.push(
-                    params
-                        .iter()
-                        .zip(arg_values.clone())
-                        .map(|(param, value)| (param.clone(), value))
-                        .collect(),
-                );
+                let new_env: HashMap<String, EvalOutcome> = params
+                    .iter()
+                    .zip(arg_values.clone())
+                    .map(|(param, value)| (param.clone(), value))
+                    .collect();
 
-                let mut return_value = Value::Unit;
+                self.with_new_scope(|interpreter| {
+                    interpreter.current_env_mut().extend(new_env);
 
-                if self.env_stack.len() > 100 {
-                    return Err(EvalError::StackOverflow(
-                        "Maximum stack depth exceeded".into(),
-                    ));
-                }
+                    if interpreter.env_stack.len() > 100 {
+                        return Err(EvalError::StackOverflow(
+                            "Maximum stack depth exceeded".into(),
+                        ));
+                    }
 
-                for &stmt_id in &body {
-                    match self.eval_node(stmt_id)? {
-                        EvalOutcome::Value(_) => continue,
-                        EvalOutcome::Return(value) => {
-                            return_value = value;
-                            break;
+                    let mut return_value = Value::Unit;
+
+                    for &stmt_id in &body {
+                        match interpreter.eval_node(stmt_id)? {
+                            EvalOutcome::Value(_) => continue,
+                            EvalOutcome::Return(value) => {
+                                return_value = value;
+                                break;
+                            }
                         }
                     }
-                }
 
-                self.env_stack.pop();
-
-                Ok(EvalOutcome::Value(return_value))
+                    Ok(EvalOutcome::Value(return_value))
+                })
             }
             AstNode::Return(x) => {
                 let v = match self.eval_node(x)? {
@@ -346,10 +365,8 @@ impl Interpreter {
                 condition,
                 increment,
                 body,
-            } => {
-                self.env_stack.push(HashMap::new());
-
-                let init_value = self.eval_node(init)?;
+            } => self.with_new_scope(|interpreter| {
+                let init_value = interpreter.eval_node(init)?;
                 if let EvalOutcome::Value(Value::Unit) = init_value {
                 } else {
                     return Err(EvalError::ParseError(
@@ -359,9 +376,11 @@ impl Interpreter {
 
                 let mut result = EvalOutcome::Value(Value::Unit);
 
-                while let EvalOutcome::Value(Value::Boolean(true)) = self.eval_node(condition)? {
+                while let EvalOutcome::Value(Value::Boolean(true)) =
+                    interpreter.eval_node(condition)?
+                {
                     for &stmt_id in &body {
-                        match self.eval_node(stmt_id)? {
+                        match interpreter.eval_node(stmt_id)? {
                             EvalOutcome::Value(_) => continue,
                             EvalOutcome::Return(val) => {
                                 result = EvalOutcome::Return(val);
@@ -374,13 +393,11 @@ impl Interpreter {
                         break;
                     }
 
-                    self.eval_node(increment)?;
+                    interpreter.eval_node(increment)?;
                 }
 
-                self.env_stack.pop();
-
                 Ok(result)
-            }
+            }),
             AstNode::PostIncrement(increment) => {
                 if let Some(EvalOutcome::Value(Value::Int(mut value))) =
                     self.get_environment().get(&increment).cloned()
@@ -422,13 +439,11 @@ impl Interpreter {
                     "Comparison does not evaluate to boolean parse error".into(),
                 )),
             },
-            AstNode::Block(items) => {
-                self.env_stack.push(HashMap::new());
-
+            AstNode::Block(items) => self.with_new_scope(|interpreter| {
                 let mut result = EvalOutcome::Value(Value::Unit);
 
                 for &item in &items {
-                    match self.eval_node(item)? {
+                    match interpreter.eval_node(item)? {
                         EvalOutcome::Value(_) => continue,
                         EvalOutcome::Return(val) => {
                             result = EvalOutcome::Return(val);
@@ -437,10 +452,8 @@ impl Interpreter {
                     }
                 }
 
-                self.env_stack.pop();
-
                 Ok(result)
-            }
+            }),
         }
     }
 

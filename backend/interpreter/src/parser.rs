@@ -315,7 +315,7 @@ impl<'a> Parser<'a> {
             } => todo!(),
             AstNode::PostIncrement(_) => todo!(),
             AstNode::Comparison(_, _comparison_op, _) => todo!(),
-            AstNode::Block(items) => todo!(),
+            AstNode::Block(..) => todo!(),
         }
     }
 
