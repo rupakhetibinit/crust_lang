@@ -21,16 +21,17 @@ pub enum AstNode {
     If {
         expression: AstNodeId,
         block: Vec<AstNodeId>,
-        else_block: Vec<AstNodeId>,
+        else_if_blocks: Option<Vec<(AstNodeId, Vec<AstNodeId>)>>,
+        else_block: Option<Vec<AstNodeId>>,
     },
     Return(AstNodeId),
     Equality(AstNodeId, AstNodeId),
     Comparison(AstNodeId, ComparisonOp, AstNodeId),
     ForLoop {
-        init: usize,
-        condition: usize,
-        increment: usize,
-        body: Vec<usize>,
+        init: AstNodeId,
+        condition: AstNodeId,
+        increment: AstNodeId,
+        body: Vec<AstNodeId>,
     },
 }
 

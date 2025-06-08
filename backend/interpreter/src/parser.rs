@@ -412,6 +412,30 @@ impl<'a> Parser<'a> {
         self.expect(Token::RBrace)?;
 
         let mut else_block = Vec::new();
+        let mut else_if_blocks = Some(Vec::<(AstNodeId, Vec<AstNodeId>)>::new());
+
+        while let Token::ElseIf = self.peek() {
+            self.expect(Token::ElseIf)?;
+
+            let else_if_expr = self.parse_expr(0)?;
+
+            self.expect(Token::LBrace)?;
+
+            let mut else_if_body = Vec::new();
+
+            while !matches!(self.peek(), Token::RBrace) {
+                let stmt = self.parse_stmt()?;
+                else_if_body.push(stmt);
+            }
+
+            self.expect(Token::RBrace)?;
+
+            if let Some(ref mut blocks) = else_if_blocks {
+                blocks.push((else_if_expr, else_if_body));
+            } else {
+                else_if_blocks = Some(vec![(else_if_expr, else_if_body)]);
+            }
+        }
 
         if let Token::Else = self.peek() {
             self.expect(Token::Else)?;
@@ -432,7 +456,8 @@ impl<'a> Parser<'a> {
         let node = AstNode::If {
             expression,
             block: body,
-            else_block,
+            else_if_blocks,
+            else_block: Some(else_block),
         };
 
         self.ast.push(node);

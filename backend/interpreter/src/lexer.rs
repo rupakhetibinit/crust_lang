@@ -82,8 +82,17 @@ impl<'a> Lexer<'a> {
                         "fn" => Token::Fn,
                         "return" => Token::Return,
                         "if" => Token::If,
-                        "else if" => Token::ElseIf,
-                        "else" => Token::Else,
+                        "else" => {
+                            self.input.next();
+                            if let Some('i') = self.input.peek() {
+                                self.input.next();
+                                if let Some('f') = self.input.peek() {
+                                    self.input.next();
+                                    return Token::ElseIf;
+                                }
+                            }
+                            return Token::Else;
+                        }
                         "for" => Token::For,
                         _ => Token::Ident(ident),
                     };

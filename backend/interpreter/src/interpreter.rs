@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, vec};
 
 use crate::ast::{AstNode, AstNodeId, BinOp, ComparisonOp};
 
@@ -261,6 +261,7 @@ impl Interpreter {
             AstNode::If {
                 expression,
                 block,
+                else_if_blocks,
                 else_block,
             } => {
                 let cond_outcome = self.eval_node(expression)?;
@@ -274,7 +275,29 @@ impl Interpreter {
                     }
                 };
 
-                let stmts = if truth { &block } else { &else_block };
+                let stmts = if truth {
+                    &block
+                } else {
+                    let else_if_block_to_execute = else_if_blocks.as_ref().and_then(|blocks| {
+                        blocks.iter().find_map(|(cond, stmts)| {
+                            if let EvalOutcome::Value(Value::Boolean(true)) =
+                                self.eval_node(*cond).unwrap()
+                            {
+                                Some(stmts)
+                            } else {
+                                None
+                            }
+                        })
+                    });
+
+                    if let Some(stmts) = else_if_block_to_execute {
+                        stmts
+                    } else {
+                        static EMPTY_VEC: Vec<AstNodeId> = Vec::new();
+                        else_block.as_ref().unwrap_or(&EMPTY_VEC)
+                    }
+                };
+
                 let mut result = EvalOutcome::Value(Value::Unit);
 
                 for &stmt_id in stmts {
