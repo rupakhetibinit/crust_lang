@@ -30,4 +30,7 @@ pub enum Token {
     Less,
     GreaterThan,
     Greater,
+    And,
+    Or,
+    Modulo,
 }

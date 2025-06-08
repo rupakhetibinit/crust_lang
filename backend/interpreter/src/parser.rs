@@ -154,6 +154,9 @@ impl<'a> Parser<'a> {
                 }
                 Token::Less => AstNode::Comparison(left, ComparisonOp::Less, right),
                 Token::Greater => AstNode::Comparison(left, ComparisonOp::Greater, right),
+                Token::And => AstNode::Comparison(left, ComparisonOp::And, right),
+                Token::Or => AstNode::Comparison(left, ComparisonOp::Or, right),
+                Token::Modulo => AstNode::BinaryExpression(left, BinOp::Modulo, right),
                 _ => return Err(ParseError::Unreachable),
             };
 
@@ -251,6 +254,7 @@ impl<'a> Parser<'a> {
                         BinOp::Mul => "Mul",
                         BinOp::Div => "Div",
                         BinOp::Exp => "Exp",
+                        BinOp::Modulo => todo!(),
                     }
                 );
                 self.print_ast(*lhs, indent + 1);
@@ -548,14 +552,16 @@ impl<'a> Parser<'a> {
 
 fn precedence(op: &Token) -> Option<u8> {
     match op {
-        Token::Star | Token::Slash => Some(2),
-        Token::Plus | Token::Minus => Some(1),
+        Token::Star | Token::Slash | Token::Modulo => Some(4),
+        Token::Plus | Token::Minus => Some(3),
         Token::EqualEqual
         | Token::Return
         | Token::Less
         | Token::Greater
         | Token::GreaterThan
-        | Token::LessThan => Some(0),
+        | Token::LessThan => Some(2),
+        Token::And => Some(1),
+        Token::Or => Some(0),
         _ => None,
     }
 }

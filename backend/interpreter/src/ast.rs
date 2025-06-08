@@ -42,6 +42,7 @@ pub enum BinOp {
     Mul,
     Div,
     Exp,
+    Modulo,
 }
 
 #[derive(Debug, Clone)]
@@ -50,6 +51,8 @@ pub enum ComparisonOp {
     Less,
     GreaterOrEqual,
     Greater,
+    Or,
+    And,
 }
 
 pub type AstNodeId = usize;

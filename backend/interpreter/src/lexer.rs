@@ -69,6 +69,26 @@ impl<'a> Lexer<'a> {
                     self.input.next();
                     return Token::Slash;
                 }
+                '%' => {
+                    self.input.next();
+                    return Token::Modulo;
+                }
+                '&' => {
+                    self.input.next();
+                    if self.input.peek() == Some(&'&') {
+                        self.input.next();
+                        return Token::And;
+                    }
+                    panic!("Invalid character: &");
+                }
+                '|' => {
+                    self.input.next();
+                    if self.input.peek() == Some(&'|') {
+                        self.input.next();
+                        return Token::Or;
+                    }
+                    panic!("Invalid character: |");
+                }
                 '0'..'9' => {
                     let number = self.consume_while(|c| c.is_numeric());
                     return Token::Number(number.parse::<i64>().unwrap());

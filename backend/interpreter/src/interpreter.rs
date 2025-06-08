@@ -119,7 +119,13 @@ impl Interpreter {
                                 BinOp::Sub => x - y,
                                 BinOp::Mul => x * y,
                                 BinOp::Div => x / y,
-                                BinOp::Exp => x ^ y,
+                                BinOp::Modulo => x % y,
+                                _ => {
+                                    return Err(EvalError::ParseError(format!(
+                                        "Cannot evaluate integer operation {:?} {:?} {:?}",
+                                        x, operator, y
+                                    )));
+                                }
                             })));
                         }
 
@@ -134,12 +140,6 @@ impl Interpreter {
                 }
             }
             AstNode::Assign(name, expr_id) => {
-                if self.get_environment().contains_key(&name) {
-                    return Err(EvalError::VariableAlreadyDefined(format!(
-                        "Variable {name} is already defined in the same scope"
-                    )));
-                }
-
                 let val = self.eval_node(expr_id)?;
 
                 self.current_env_mut().insert(name, val);
@@ -388,11 +388,26 @@ impl Interpreter {
                         ComparisonOp::Less => lhs < rhs,
                         ComparisonOp::GreaterOrEqual => lhs >= rhs,
                         ComparisonOp::Greater => lhs > rhs,
+                        _ => {
+                            return Err(EvalError::ParseError(
+                                "Comparison does not evaluate to boolean".into(),
+                            ));
+                        }
                     };
                     Ok(EvalOutcome::Value(Value::Boolean(result)))
                 }
+                (
+                    EvalOutcome::Value(Value::Boolean(lhs)),
+                    EvalOutcome::Value(Value::Boolean(rhs)),
+                ) => match op {
+                    ComparisonOp::Or => Ok(EvalOutcome::Value(Value::Boolean(lhs || rhs))),
+                    ComparisonOp::And => Ok(EvalOutcome::Value(Value::Boolean(lhs && rhs))),
+                    _ => Err(EvalError::ParseError(
+                        "Comparison does not evaluate to boolean this".into(),
+                    )),
+                },
                 _ => Err(EvalError::ParseError(
-                    "Comparison does not evaluate to boolean".into(),
+                    "Comparison does not evaluate to boolean parse error".into(),
                 )),
             },
         }
