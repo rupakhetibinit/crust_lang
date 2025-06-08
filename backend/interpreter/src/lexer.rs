@@ -94,12 +94,32 @@ impl<'a> Lexer<'a> {
                     }
                     panic!("Invalid character: |");
                 }
-                '0'..'9' => {
+                ':' => {
+                    self.input.next();
+                    if self.input.peek() == Some(&':') {
+                        self.input.next();
+                        return Token::DoubleColon;
+                    }
+                    return Token::Colon;
+                }
+                '[' => {
+                    self.input.next();
+                    return Token::LBracket;
+                }
+                ']' => {
+                    self.input.next();
+                    return Token::RBracket;
+                }
+                '.' => {
+                    self.input.next();
+                    return Token::Dot;
+                }
+                '0'..='9' => {
                     let number = self.consume_while(|c| c.is_numeric());
                     return Token::Number(number.parse::<i64>().unwrap());
                 }
                 'a'..='z' | 'A'..='Z' | '_' => {
-                    let ident = self.consume_while(|c| c.is_alphabetic() || c == '_');
+                    let ident = self.consume_while(|c| c.is_alphanumeric() || c == '_');
 
                     return match ident.as_str() {
                         "let" => Token::Let,
@@ -119,6 +139,8 @@ impl<'a> Lexer<'a> {
                             return Token::Else;
                         }
                         "for" => Token::For,
+                        "struct" => Token::StructDecl,
+                        "impl" => Token::StructImpl,
                         _ => Token::Ident(ident),
                     };
                 }

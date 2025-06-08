@@ -33,4 +33,14 @@ pub enum Token {
     And,
     Or,
     Modulo,
+
+    // Struct-related tokens
+    StructDecl,
+    StructImpl,
+
+    LBracket,
+    RBracket,
+    Colon,
+    Dot,
+    DoubleColon,
 }

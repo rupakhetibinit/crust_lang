@@ -1,0 +1,9 @@
+fn stuff(x) {
+    return x;
+}
+
+fn add(a,b) {
+    return a + b;
+}
+
+print(add(stuff(2),3));

@@ -83,6 +83,37 @@ impl<'a> Parser<'a> {
                     self.expect(Token::Semicolon)?;
                     call
                 }
+                Some(Token::Dot) => {
+                    let base_expr_id = self.parse_expr(0)?;
+
+                    if self.peek() == &Token::Equal {
+                        let ast_node = self.ast[base_expr_id].clone();
+                        if let AstNode::StructFieldAccess { instance, field } = ast_node {
+                            self.next();
+
+                            let value = self.parse_expr(0)?;
+                            self.expect(Token::Semicolon)?;
+
+                            let assignment_id = self.ast.len();
+
+                            self.ast.push(AstNode::StructFieldAssignment {
+                                instance,
+                                field,
+                                value,
+                            });
+
+                            assignment_id
+                        } else {
+                            return Err(ParseError::UnexpectedToken(format!(
+                                "Expected struct field access, got {:?}",
+                                ast_node
+                            )));
+                        }
+                    } else {
+                        self.expect(Token::Semicolon)?;
+                        base_expr_id
+                    }
+                }
                 _ => {
                     let expr = self.parse_expr(0)?;
                     self.expect(Token::Semicolon)?;
@@ -107,9 +138,10 @@ impl<'a> Parser<'a> {
 
                 block_id
             }
+            Token::StructDecl => self.parse_struct_decl()?,
+            Token::StructImpl => self.parse_struct_impl()?,
             _ => {
                 let expr = self.parse_expr(0)?;
-                self.expect(Token::Semicolon)?;
                 expr
             }
         };
@@ -216,7 +248,7 @@ impl<'a> Parser<'a> {
                 return self.parse_fn_call();
             }
         }
-        match self.next() {
+        let mut left = match self.next() {
             Token::Number(n) => {
                 let id = self.ast.len();
                 self.ast.push(AstNode::Number(n));
@@ -224,6 +256,14 @@ impl<'a> Parser<'a> {
                 Ok(id)
             }
             Token::Ident(name) => {
+                if matches!(self.peek(), Token::DoubleColon) {
+                    return self.parse_struct_static_call(name);
+                }
+
+                if matches!(self.peek(), Token::LBrace) {
+                    return self.parse_struct_init(name);
+                }
+
                 let id = self.ast.len();
                 self.ast.push(AstNode::Var(name));
 
@@ -244,7 +284,59 @@ impl<'a> Parser<'a> {
                 "Unexpected token in expression: {:?}",
                 t
             ))),
+        }?;
+
+        while matches!(self.peek(), Token::Dot) {
+            self.next();
+
+            let name = if let Token::Ident(s) = self.next() {
+                s
+            } else {
+                return Err(ParseError::UnexpectedToken(format!(
+                    "Expected field or method name after dot, got {:?}",
+                    self.peek()
+                )));
+            };
+
+            if matches!(self.peek(), Token::LParen) {
+                self.next();
+
+                let mut args = vec![];
+
+                if !matches!(self.peek(), Token::RParen) {
+                    loop {
+                        let expr_id = self.parse_expr(0)?;
+                        args.push(expr_id);
+
+                        if !matches!(self.peek(), Token::Comma) {
+                            break;
+                        }
+
+                        self.next();
+                    }
+                }
+
+                self.expect(Token::RParen)?;
+
+                let id = self.ast.len();
+
+                self.ast.push(AstNode::StructMethodCall {
+                    struct_instance: left,
+                    method_name: name,
+                    args,
+                });
+
+                left = id;
+            } else {
+                let id = self.ast.len();
+                self.ast.push(AstNode::StructFieldAccess {
+                    instance: left,
+                    field: name,
+                });
+                left = id;
+            }
         }
+        return Ok(left);
     }
 
     pub fn print_ast(&self, root: AstNodeId, indent: usize) {
@@ -316,6 +408,34 @@ impl<'a> Parser<'a> {
             AstNode::PostIncrement(_) => todo!(),
             AstNode::Comparison(_, _comparison_op, _) => todo!(),
             AstNode::Block(..) => todo!(),
+            AstNode::StructDeclaration { name, fields } => todo!(),
+            AstNode::StructImpl { name, methods } => todo!(),
+            AstNode::StructMethodCall {
+                struct_instance,
+                method_name,
+                args,
+            } => todo!(),
+            AstNode::StructMethod {
+                name,
+                params,
+                body,
+                is_static,
+            } => todo!(),
+            AstNode::StructStaticCall {
+                struct_name,
+                method_name,
+                args,
+            } => todo!(),
+            AstNode::StructInit {
+                struct_name,
+                fields,
+            } => todo!(),
+            AstNode::StructFieldAccess { instance, field } => todo!(),
+            AstNode::StructFieldAssignment {
+                instance,
+                field,
+                value,
+            } => todo!(),
         }
     }
 
@@ -563,6 +683,244 @@ impl<'a> Parser<'a> {
         let id = self.ast.len();
 
         self.ast.push(AstNode::PostIncrement(name.clone()));
+
+        Ok(id)
+    }
+
+    fn parse_struct_decl(&mut self) -> Result<AstNodeId, ParseError> {
+        self.expect(Token::StructDecl)?;
+
+        let name = if let Token::Ident(s) = self.next() {
+            s
+        } else {
+            return Err(ParseError::UnexpectedToken(format!(
+                "Expected identifier for struct declaration, got {:?}",
+                self.peek()
+            )));
+        };
+
+        self.expect(Token::LBrace)?;
+
+        let mut fields = Vec::new();
+
+        while !matches!(self.peek(), Token::RBrace) {
+            let field_name = if let Token::Ident(s) = self.next() {
+                s
+            } else {
+                return Err(ParseError::UnexpectedToken(format!(
+                    "Expected identifier for struct field, got {:?}",
+                    self.peek()
+                )));
+            };
+
+            self.expect(Token::Comma)?;
+
+            fields.push(field_name);
+
+            if matches!(self.peek(), Token::Comma) {
+                self.next();
+            }
+        }
+
+        self.expect(Token::RBrace)?;
+
+        let id = self.ast.len();
+
+        self.ast.push(AstNode::StructDeclaration { name, fields });
+
+        Ok(id)
+    }
+
+    fn parse_struct_impl(&mut self) -> Result<AstNodeId, ParseError> {
+        self.expect(Token::StructImpl)?;
+
+        let name = if let Token::Ident(s) = self.next() {
+            s
+        } else {
+            return Err(ParseError::UnexpectedToken(format!(
+                "Expected identifier for struct implementation, got {:?}",
+                self.peek()
+            )));
+        };
+
+        self.expect(Token::LBrace)?;
+
+        let mut methods = Vec::new();
+
+        while !matches!(self.peek(), Token::RBrace) {
+            let method_id = self.parse_struct_method()?;
+            methods.push(method_id);
+
+            if matches!(self.peek(), Token::Comma) {
+                self.next();
+            }
+        }
+
+        self.expect(Token::RBrace)?;
+        let id = self.ast.len();
+
+        self.ast.push(AstNode::StructImpl { name, methods });
+
+        Ok(id)
+    }
+
+    fn parse_struct_method(&mut self) -> Result<AstNodeId, ParseError> {
+        self.expect(Token::Fn)?;
+        let is_static = if let Some(Token::Ident(_)) = self.peek_nth(0) {
+            if let Some(Token::LParen) = self.peek_nth(1) {
+                let mut temp_tokens = self.tokens.clone();
+                temp_tokens.next();
+                temp_tokens.next();
+
+                if let Some(Token::Ident(first_param)) = temp_tokens.next() {
+                    first_param != "self"
+                } else {
+                    true
+                }
+            } else {
+                return Err(ParseError::UnexpectedToken(format!(
+                    "Expected '(' after method name, got {:?}",
+                    self.peek_nth(1)
+                )));
+            }
+        } else {
+            return Err(ParseError::UnexpectedToken(format!(
+                "Expected method name, got {:?}",
+                self.peek()
+            )));
+        };
+
+        let name = if let Token::Ident(s) = self.next() {
+            s
+        } else {
+            return Err(ParseError::UnexpectedToken(format!(
+                "Expected method name, got {:?}",
+                self.peek()
+            )));
+        };
+
+        self.expect(Token::LParen)?;
+
+        let mut params = Vec::new();
+
+        if !matches!(self.peek(), Token::RParen) {
+            loop {
+                if let Token::Ident(param) = self.next() {
+                    params.push(param);
+                } else {
+                    return Err(ParseError::UnexpectedToken(format!(
+                        "Expected parameter name, got {:?}",
+                        self.peek()
+                    )));
+                }
+
+                if matches!(self.peek(), Token::Comma) {
+                    self.next();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        self.expect(Token::RParen)?;
+        self.expect(Token::LBrace)?;
+
+        let mut body = Vec::new();
+        while !matches!(self.peek(), Token::RBrace) {
+            let stmt = self.parse_stmt()?;
+            body.push(stmt);
+        }
+
+        self.expect(Token::RBrace)?;
+
+        let id = self.ast.len();
+
+        self.ast.push(AstNode::StructMethod {
+            name,
+            params,
+            body,
+            is_static,
+        });
+
+        Ok(id)
+    }
+
+    fn parse_struct_static_call(&mut self, struct_name: String) -> Result<AstNodeId, ParseError> {
+        self.expect(Token::DoubleColon)?;
+
+        let method_name = if let Token::Ident(s) = self.next() {
+            s
+        } else {
+            return Err(ParseError::UnexpectedToken(format!(
+                "Expected identifier for struct method call, got {:?}",
+                self.peek()
+            )));
+        };
+
+        self.expect(Token::LParen)?;
+
+        let mut args = vec![];
+
+        if !matches!(self.peek(), Token::RParen) {
+            loop {
+                let expr_id = self.parse_expr(0)?;
+                args.push(expr_id);
+
+                if matches!(self.peek(), Token::Comma) {
+                    self.next();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        self.expect(Token::RParen)?;
+
+        let id = self.ast.len();
+
+        self.ast.push(AstNode::StructStaticCall {
+            struct_name,
+            method_name,
+            args,
+        });
+
+        return Ok(id);
+    }
+
+    fn parse_struct_init(&mut self, struct_name: String) -> Result<AstNodeId, ParseError> {
+        self.expect(Token::LBrace)?;
+
+        let mut fields = Vec::new();
+
+        while !matches!(self.peek(), Token::RBrace) {
+            let field_name = if let Token::Ident(s) = self.next() {
+                s
+            } else {
+                return Err(ParseError::UnexpectedToken(format!(
+                    "Expected identifier for struct field, got {:?}",
+                    self.peek()
+                )));
+            };
+
+            self.expect(Token::Equal)?;
+
+            let value = self.parse_expr(0)?;
+
+            fields.push((field_name, value));
+
+            if matches!(self.peek(), Token::Comma) {
+                self.next();
+            }
+        }
+
+        self.expect(Token::RBrace)?;
+
+        let id = self.ast.len();
+
+        self.ast.push(AstNode::StructInit {
+            struct_name,
+            fields,
+        });
 
         Ok(id)
     }

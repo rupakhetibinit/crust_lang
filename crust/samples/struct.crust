@@ -1,0 +1,27 @@
+struct Vector2 {
+    x,
+    y,
+}
+
+impl Vector2 {
+    fn new(x,y) {
+        return Vector2 { x = x, y = y};
+    } 
+
+    fn add(self,vector) {
+        self.x = self.x + vector.x;
+        self.y = self.y + vector.y;
+    }
+
+    fn show(self) {
+        print("X : ", self.x, " Y : ", self.y);
+    }
+}
+
+let x = Vector2::new(1,2);
+let y = Vector2::new(3,4);
+
+x.add(y);
+x.show();
+y.show();
+

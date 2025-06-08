@@ -7,13 +7,29 @@ pub struct Interpreter {
     ast: Vec<AstNode>,
     roots: Vec<AstNodeId>,
     env_stack: Vec<HashMap<String, EvalOutcome>>,
+    structs: HashMap<String, StructType>,
     functions: HashMap<String, Function>,
+    current_impl_struct: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Function {
     pub params: Vec<String>,
     pub body: Vec<AstNodeId>,
+}
+
+#[derive(Debug, Clone)]
+pub struct StructType {
+    pub name: String,
+    pub fields: Vec<String>,
+    pub methods: HashMap<String, Function>,
+    pub static_methods: HashMap<String, Function>,
+}
+
+#[derive(Debug, Clone)]
+pub struct StructInstance {
+    pub struct_type: String,
+    pub fields: HashMap<String, EvalOutcome>,
 }
 
 #[derive(Debug)]
@@ -34,6 +50,7 @@ pub enum Value {
     String(String),
     Boolean(bool),
     Unit,
+    Struct(StructInstance),
 }
 
 #[derive(Debug, Clone)]
@@ -48,7 +65,9 @@ impl Interpreter {
             ast,
             roots,
             env_stack: vec![HashMap::new()],
+            structs: HashMap::new(),
             functions: HashMap::new(),
+            current_impl_struct: None,
         }
     }
 
@@ -61,8 +80,10 @@ impl Interpreter {
         Self {
             ast,
             roots,
+            structs: HashMap::new(),
             env_stack: vec![env],
             functions,
+            current_impl_struct: None,
         }
     }
 
@@ -190,6 +211,13 @@ impl Interpreter {
                             Value::String(x) => write!(output_string, "{}", x).unwrap(),
                             Value::Boolean(bool) => {
                                 write!(output_string, "{}", bool.to_string()).unwrap()
+                            }
+                            Value::Struct(struct_instance) => {
+                                write!(output_string, "Struct({})", struct_instance.struct_type)
+                                    .unwrap();
+                                for (field, value) in struct_instance.fields {
+                                    write!(output_string, " {}: {:?}", field, value).unwrap();
+                                }
                             }
                         },
                     }
@@ -454,6 +482,332 @@ impl Interpreter {
 
                 Ok(result)
             }),
+            AstNode::StructDeclaration { name, fields } => {
+                if self.structs.contains_key(&name) {
+                    return Err(EvalError::VariableAlreadyDefined(format!(
+                        "Struct {} is already defined",
+                        name
+                    )));
+                }
+
+                let struct_type = StructType {
+                    name: name.clone(),
+                    fields: fields.clone(),
+                    methods: HashMap::new(),
+                    static_methods: HashMap::new(),
+                };
+
+                self.structs.insert(name, struct_type);
+
+                Ok(EvalOutcome::Value(Value::Unit))
+            }
+            AstNode::StructImpl { name, methods } => {
+                if !self.structs.contains_key(&name) {
+                    return Err(EvalError::UndefinedVariable(format!(
+                        "Struct {} is not defined",
+                        name
+                    )));
+                };
+
+                self.current_impl_struct = Some(name.clone());
+
+                for &method_id in &methods {
+                    self.eval_node(method_id)?;
+                }
+
+                self.current_impl_struct = None;
+
+                Ok(EvalOutcome::Value(Value::Unit))
+            }
+            AstNode::StructMethodCall {
+                struct_instance,
+                method_name,
+                args,
+            } => {
+                let instance_value = self.eval_node(struct_instance)?;
+
+                let struct_instance = match instance_value {
+                    EvalOutcome::Value(Value::Struct(struct_instance)) => struct_instance,
+                    _ => {
+                        return Err(EvalError::ParseError(format!(
+                            "Cannot call method on a non struct value"
+                        )));
+                    }
+                };
+
+                let struct_type =
+                    self.structs
+                        .get(&struct_instance.struct_type)
+                        .ok_or_else(|| {
+                            EvalError::UndefinedVariable(format!(
+                                "Struct is not defined {}",
+                                struct_instance.struct_type
+                            ))
+                        })?;
+
+                let method = struct_type
+                    .methods
+                    .get(&method_name)
+                    .ok_or_else(|| {
+                        EvalError::UndefinedFunction(format!(
+                            "Method {} not found on struct {}",
+                            method_name, struct_instance.struct_type
+                        ))
+                    })?
+                    .clone();
+
+                let mut arg_values = Vec::with_capacity(args.len());
+
+                for arg_node in args.clone() {
+                    let v = self.eval_node(arg_node)?;
+                    arg_values.push(v);
+                }
+
+                // Check argument count (excluding 'self' parameter)
+                if method.params.len() != arg_values.len() + 1 {
+                    return Err(EvalError::InvalidFunctionArguments(format!(
+                        "Method {}::{} expects {} arguments, got {}",
+                        struct_instance.struct_type,
+                        method_name,
+                        method.params.len() - 1,
+                        args.len()
+                    )));
+                }
+
+                let mut new_env = HashMap::new();
+                new_env.insert(
+                    "self".to_string(),
+                    EvalOutcome::Value(Value::Struct(struct_instance)),
+                );
+
+                for (param, value) in method.params.iter().skip(1).zip(arg_values) {
+                    new_env.insert(param.clone(), value);
+                }
+
+                self.with_new_scope(|interpreter| {
+                    interpreter.current_env_mut().extend(new_env);
+
+                    if interpreter.env_stack.len() > 100 {
+                        return Err(EvalError::StackOverflow(
+                            "Maximum stack depth exceeded".into(),
+                        ));
+                    }
+
+                    let mut return_value = Value::Unit;
+
+                    for &stmt_id in &method.body {
+                        match interpreter.eval_node(stmt_id)? {
+                            EvalOutcome::Value(_) => continue,
+                            EvalOutcome::Return(value) => {
+                                return_value = value;
+                                break;
+                            }
+                        }
+                    }
+
+                    Ok(EvalOutcome::Value(return_value))
+                })
+            }
+            AstNode::StructMethod {
+                name,
+                params,
+                body,
+                is_static,
+            } => {
+                let struct_name = self.current_impl_struct.clone().ok_or_else(|| {
+                    EvalError::NotImplemented(
+                        "Struct method defined outside of struct implementation".to_string(),
+                    )
+                })?;
+
+                let function = Function {
+                    params: params.clone(),
+                    body: body.clone(),
+                };
+
+                let struct_type = self.structs.get_mut(&struct_name).ok_or_else(|| {
+                    EvalError::UndefinedVariable(format!("Struct {} is not defined", struct_name))
+                })?;
+
+                if is_static {
+                    struct_type.static_methods.insert(name.clone(), function);
+                } else {
+                    struct_type.methods.insert(name.clone(), function);
+                }
+
+                Ok(EvalOutcome::Value(Value::Unit))
+            }
+            AstNode::StructStaticCall {
+                struct_name,
+                method_name,
+                args,
+            } => {
+                let struct_type = self.structs.get(&struct_name).ok_or_else(|| {
+                    EvalError::UndefinedVariable(format!("Struct {} is not defined", struct_name))
+                })?;
+
+                let method = struct_type
+                    .static_methods
+                    .get(&method_name)
+                    .ok_or_else(|| {
+                        EvalError::UndefinedFunction(format!(
+                            "Static method {}::{} is not defined",
+                            struct_name, method_name
+                        ))
+                    })?
+                    .clone();
+
+                if method.params.len() != args.len() {
+                    return Err(EvalError::InvalidFunctionArguments(format!(
+                        "Static method {}::{} expects {} arguments, got {}",
+                        struct_name,
+                        method_name,
+                        method.params.len(),
+                        args.len()
+                    )));
+                }
+
+                let mut arg_values = Vec::with_capacity(args.len());
+
+                for arg_node in args {
+                    let v = self.eval_node(arg_node)?;
+                    arg_values.push(v);
+                }
+
+                let new_env: HashMap<String, EvalOutcome> = method
+                    .params
+                    .iter()
+                    .zip(arg_values.clone())
+                    .map(|(param, value)| (param.clone(), value))
+                    .collect();
+
+                self.with_new_scope(|interpreter| {
+                    interpreter.current_env_mut().extend(new_env);
+
+                    if interpreter.env_stack.len() > 100 {
+                        return Err(EvalError::StackOverflow(
+                            "Maximum stack depth exceeded".into(),
+                        ));
+                    }
+
+                    let mut return_value = Value::Unit;
+
+                    for &stmt_id in &method.body {
+                        match interpreter.eval_node(stmt_id)? {
+                            EvalOutcome::Value(_) => continue,
+                            EvalOutcome::Return(value) => {
+                                return_value = value;
+                                break;
+                            }
+                        }
+                    }
+
+                    Ok(EvalOutcome::Value(return_value))
+                })
+            }
+            AstNode::StructInit {
+                struct_name,
+                fields,
+            } => {
+                let mut field_values = HashMap::new();
+
+                for (field, value_node) in fields {
+                    let value = self.eval_node(value_node)?;
+                    if let EvalOutcome::Value(Value::Unit) = value {
+                        return Err(EvalError::ParseError(format!(
+                            "Field {} in struct {} cannot be initialized with unit",
+                            field, struct_name
+                        )));
+                    }
+                    field_values.insert(field, value);
+                }
+
+                let struct_type = self.structs.get(&struct_name).ok_or_else(|| {
+                    EvalError::UndefinedVariable(format!("Struct {} is not defined", struct_name))
+                })?;
+
+                for field in &struct_type.fields {
+                    if !field_values.contains_key(field) {
+                        return Err(EvalError::ParseError(format!(
+                            "Field {} in struct {} is not initialized",
+                            field, struct_name
+                        )));
+                    }
+                }
+
+                Ok(EvalOutcome::Value(Value::Struct(StructInstance {
+                    struct_type: struct_name.clone(),
+                    fields: field_values,
+                })))
+            }
+            AstNode::StructFieldAccess { instance, field } => {
+                let instance_value = self.eval_node(instance)?;
+
+                match instance_value {
+                    EvalOutcome::Value(Value::Struct(struct_instance)) => {
+                        match struct_instance.fields.get(&field) {
+                            Some(value) => Ok(value.clone()),
+                            None => Err(EvalError::UndefinedVariable(format!(
+                                "Struct does not contain definition for {}",
+                                field,
+                            ))),
+                        }
+                    }
+                    _ => Err(EvalError::ParseError(format!(
+                        "Cannot access field on a non struct value"
+                    ))),
+                }
+            }
+            AstNode::StructFieldAssignment {
+                instance,
+                field,
+                value,
+            } => {
+                let new_value = match self.eval_node(value)? {
+                    EvalOutcome::Return(_) => {
+                        return Err(EvalError::ParseError(format!(
+                            "Return not allowed in field assignment"
+                        )));
+                    }
+                    EvalOutcome::Value(value) => value,
+                };
+
+                let instance_value = self.ast[instance].clone();
+
+                match instance_value {
+                    AstNode::Var(var_name) => {
+                        let current_value = self.lookup_variable(&var_name).ok_or_else(|| {
+                            EvalError::UndefinedVariable(format!(
+                                "Variable {} is not defined",
+                                var_name
+                            ))
+                        })?;
+
+                        match current_value {
+                            EvalOutcome::Value(Value::Struct(mut struct_instance)) => {
+                                if !struct_instance.fields.contains_key(&field) {
+                                    return Err(EvalError::UndefinedVariable(format!(
+                                        "Field {} doesn't exist on struct {}",
+                                        field, struct_instance.struct_type
+                                    )));
+                                }
+
+                                struct_instance
+                                    .fields
+                                    .insert(field, EvalOutcome::Value(new_value));
+
+                                Ok(EvalOutcome::Value(Value::Struct(struct_instance)))
+                            }
+                            _ => Err(EvalError::ParseError(format!(
+                                "Cannot assign fields on non-struct value"
+                            ))),
+                        }
+                    }
+                    _ => Err(EvalError::ParseError(format!(
+                        "Can only assign fields on struct variables"
+                    ))),
+                }
+            }
         }
     }
 

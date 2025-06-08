@@ -34,6 +34,43 @@ pub enum AstNode {
         increment: AstNodeId,
         body: Vec<AstNodeId>,
     },
+    StructDeclaration {
+        name: String,
+        fields: Vec<String>,
+    },
+    StructImpl {
+        name: String,
+        methods: Vec<AstNodeId>,
+    },
+    StructMethod {
+        name: String,
+        params: Vec<String>,
+        body: Vec<AstNodeId>,
+        is_static: bool,
+    },
+    StructMethodCall {
+        struct_instance: AstNodeId,
+        method_name: String,
+        args: Vec<AstNodeId>,
+    },
+    StructStaticCall {
+        struct_name: String,
+        method_name: String,
+        args: Vec<AstNodeId>,
+    },
+    StructInit {
+        struct_name: String,
+        fields: Vec<(String, AstNodeId)>,
+    },
+    StructFieldAccess {
+        instance: AstNodeId,
+        field: String,
+    },
+    StructFieldAssignment {
+        instance: AstNodeId,
+        field: String,
+        value: AstNodeId,
+    },
 }
 
 #[derive(Debug, Clone)]
