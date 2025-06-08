@@ -41,6 +41,7 @@ pub enum EvalError {
     UndefinedFunction(String),
     InvalidFunctionArguments(String),
     StackOverflow(String),
+    TypeError(String),
 }
 
 #[derive(Debug, Clone)]
@@ -87,9 +88,9 @@ impl Interpreter {
         }
     }
 
-    fn with_new_scope<F>(&mut self, f: F) -> Result<EvalOutcome, EvalError>
+    fn with_new_scope<T, F>(&mut self, f: F) -> Result<T, EvalError>
     where
-        F: FnOnce(&mut Interpreter) -> Result<EvalOutcome, EvalError>,
+        F: FnOnce(&mut Interpreter) -> Result<T, EvalError>,
     {
         self.env_stack.push(HashMap::new());
         let result = f(self);
@@ -524,26 +525,40 @@ impl Interpreter {
                 method_name,
                 args,
             } => {
-                let instance_value = self.eval_node(struct_instance)?;
+                let instance_node_id = struct_instance;
+                let instance_ast_node_cloned =
+                    self.ast.get(instance_node_id).cloned().ok_or_else(|| {
+                        EvalError::ParseError(
+                            "Invalid instance node ID for method call target".to_string(),
+                        )
+                    })?;
 
-                let struct_instance = match instance_value {
+                let original_var_name_if_simple: Option<String> = match &instance_ast_node_cloned {
+                    AstNode::Var(name) => Some(name.clone()),
+                    _ => None,
+                };
+
+                let evaluated_instance_outcome = self.eval_node(instance_node_id)?;
+                let struct_data_for_method_scope = match &evaluated_instance_outcome {
                     EvalOutcome::Value(Value::Struct(struct_instance)) => struct_instance,
+                    EvalOutcome::Return(_) => return Ok(evaluated_instance_outcome.clone()),
                     _ => {
-                        return Err(EvalError::ParseError(format!(
+                        return Err(EvalError::TypeError(format!(
                             "Cannot call method on a non struct value"
                         )));
                     }
-                };
+                }
+                .clone();
 
-                let struct_type =
-                    self.structs
-                        .get(&struct_instance.struct_type)
-                        .ok_or_else(|| {
-                            EvalError::UndefinedVariable(format!(
-                                "Struct is not defined {}",
-                                struct_instance.struct_type
-                            ))
-                        })?;
+                let struct_type = self
+                    .structs
+                    .get(&struct_data_for_method_scope.struct_type)
+                    .ok_or_else(|| {
+                        EvalError::UndefinedVariable(format!(
+                            "Struct is not defined {}",
+                            struct_data_for_method_scope.struct_type
+                        ))
+                    })?;
 
                 let method = struct_type
                     .methods
@@ -551,7 +566,7 @@ impl Interpreter {
                     .ok_or_else(|| {
                         EvalError::UndefinedFunction(format!(
                             "Method {} not found on struct {}",
-                            method_name, struct_instance.struct_type
+                            method_name, struct_data_for_method_scope.struct_type
                         ))
                     })?
                     .clone();
@@ -563,11 +578,10 @@ impl Interpreter {
                     arg_values.push(v);
                 }
 
-                // Check argument count (excluding 'self' parameter)
                 if method.params.len() != arg_values.len() + 1 {
                     return Err(EvalError::InvalidFunctionArguments(format!(
                         "Method {}::{} expects {} arguments, got {}",
-                        struct_instance.struct_type,
+                        struct_data_for_method_scope.struct_type,
                         method_name,
                         method.params.len() - 1,
                         args.len()
@@ -577,36 +591,46 @@ impl Interpreter {
                 let mut new_env = HashMap::new();
                 new_env.insert(
                     "self".to_string(),
-                    EvalOutcome::Value(Value::Struct(struct_instance)),
+                    EvalOutcome::Value(Value::Struct(struct_data_for_method_scope)),
                 );
 
                 for (param, value) in method.params.iter().skip(1).zip(arg_values) {
                     new_env.insert(param.clone(), value);
                 }
 
-                self.with_new_scope(|interpreter| {
-                    interpreter.current_env_mut().extend(new_env);
+                let (method_body_result_outcome, final_self_outcome_in_method_scope) = self
+                    .with_new_scope(|interpreter| {
+                        interpreter.current_env_mut().extend(new_env);
 
-                    if interpreter.env_stack.len() > 100 {
-                        return Err(EvalError::StackOverflow(
-                            "Maximum stack depth exceeded".into(),
-                        ));
-                    }
+                        if interpreter.env_stack.len() > 100 {
+                            return Err(EvalError::StackOverflow(
+                                "Maximum stack depth exceeded".into(),
+                            ));
+                        }
 
-                    let mut return_value = Value::Unit;
+                        let mut return_value = Value::Unit;
 
-                    for &stmt_id in &method.body {
-                        match interpreter.eval_node(stmt_id)? {
-                            EvalOutcome::Value(_) => continue,
-                            EvalOutcome::Return(value) => {
-                                return_value = value;
-                                break;
+                        for &stmt_id in &method.body {
+                            match interpreter.eval_node(stmt_id)? {
+                                EvalOutcome::Value(_) => continue,
+                                EvalOutcome::Return(value) => {
+                                    return_value = value;
+                                    break;
+                                }
                             }
                         }
-                    }
 
-                    Ok(EvalOutcome::Value(return_value))
-                })
+                        let final_self_in_method = interpreter
+                            .lookup_variable("self")
+                            .expect("'self' variable should exist in method scope after execution");
+                        Ok((EvalOutcome::Value(return_value), final_self_in_method))
+                    })?;
+
+                if let Some(var_name) = original_var_name_if_simple {
+                    self.reassign_variable(&var_name, final_self_outcome_in_method_scope)?;
+                }
+
+                Ok(method_body_result_outcome)
             }
             AstNode::StructMethod {
                 name,
@@ -763,49 +787,62 @@ impl Interpreter {
                 field,
                 value,
             } => {
-                let new_value = match self.eval_node(value)? {
-                    EvalOutcome::Return(_) => {
-                        return Err(EvalError::ParseError(format!(
-                            "Return not allowed in field assignment"
-                        )));
-                    }
-                    EvalOutcome::Value(value) => value,
-                };
+                let new_value_outcome = self.eval_node(value)?;
+                // Ensure we are not trying to assign a 'Return' directly into a field
+                if let EvalOutcome::Return(_) = new_value_outcome {
+                    return Err(EvalError::TypeError(
+                        "Cannot assign a return statement directly to a struct field".to_string(),
+                    ));
+                }
 
-                let instance_value = self.ast[instance].clone();
+                // 'instance' is an AstNodeId. We need to get the AstNode itself.
+                // This node tells us *what* we are assigning to (e.g., a variable name).
+                let instance_ast_node = self.ast.get(instance).cloned().ok_or_else(|| {
+                    EvalError::ParseError(
+                        "Invalid instance node ID for struct field assignment".to_string(),
+                    )
+                })?;
 
-                match instance_value {
+                match instance_ast_node {
                     AstNode::Var(var_name) => {
-                        let current_value = self.lookup_variable(&var_name).ok_or_else(|| {
-                            EvalError::UndefinedVariable(format!(
-                                "Variable {} is not defined",
-                                var_name
-                            ))
-                        })?;
+                        // Lookup the variable. This returns a clone of its EvalOutcome.
+                        let mut current_var_outcome = self
+                            .lookup_variable(&var_name)
+                            .ok_or_else(|| EvalError::UndefinedVariable(var_name.clone()))?;
 
-                        match current_value {
-                            EvalOutcome::Value(Value::Struct(mut struct_instance)) => {
+                        match &mut current_var_outcome {
+                            // Mutate the cloned EvalOutcome
+                            EvalOutcome::Value(Value::Struct(struct_instance)) => {
+                                // struct_instance is &mut StructInstance
                                 if !struct_instance.fields.contains_key(&field) {
                                     return Err(EvalError::UndefinedVariable(format!(
-                                        "Field {} doesn't exist on struct {}",
+                                        "Field '{}' doesn't exist on struct '{}' for assignment",
                                         field, struct_instance.struct_type
                                     )));
                                 }
 
                                 struct_instance
                                     .fields
-                                    .insert(field, EvalOutcome::Value(new_value));
+                                    .insert(field.clone(), new_value_outcome);
 
-                                Ok(EvalOutcome::Value(Value::Struct(struct_instance)))
+                                // Reassign the modified outcome (which contains the modified struct)
+                                // back to the variable in the environment.
+                                self.reassign_variable(&var_name, current_var_outcome)?;
+                                Ok(EvalOutcome::Value(Value::Unit)) // Assignment typically results in Unit
                             }
-                            _ => Err(EvalError::ParseError(format!(
-                                "Cannot assign fields on non-struct value"
+                            _ => Err(EvalError::TypeError(format!(
+                                "Variable '{}' is not a struct, cannot assign field '{}'",
+                                var_name, field
                             ))),
                         }
                     }
-                    _ => Err(EvalError::ParseError(format!(
-                        "Can only assign fields on struct variables"
-                    ))),
+                    // TODO: Handle assignment to nested fields like `obj.field1.field2 = value;`
+                    // This would involve instance_ast_node being AstNode::StructFieldAccess
+                    // and would require a more complex way to get a mutable reference or path.
+                    _ => Err(EvalError::TypeError(
+                        "Left-hand side of struct field assignment must be a variable (for now)"
+                            .to_string(),
+                    )),
                 }
             }
         }
@@ -820,7 +857,7 @@ impl Interpreter {
         }
 
         Err(EvalError::UndefinedVariable(format!(
-            "Variable {} is not defined in scope",
+            "Variable {} is not defined in scope for reassignment",
             var
         )))
     }
