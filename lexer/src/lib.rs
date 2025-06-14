@@ -1,5 +1,3 @@
-use std::fmt::format;
-
 use logos::Logos;
 
 #[derive(Logos, Debug, PartialEq)]
@@ -10,8 +8,8 @@ pub enum Token<'t> {
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*")]
     Ident(&'t str),
 
-    #[token(" ")]
-    Space,
+    #[regex(r" +", |lex| lex.slice())]
+    Space(&'t str),
 
     #[token("\t")]
     Tab,
@@ -63,6 +61,71 @@ pub enum Token<'t> {
 
     #[regex(r"//[^\n]*", |lex| lex.slice().to_string())]
     LineComment(String),
+
+    #[token("%")]
+    Modulo,
+
+    #[regex(r#""[^"]*""#, parse_string_slice)]
+    StringLiteral(&'t str),
+
+    #[token("let")]
+    Let,
+
+    #[token("const")]
+    Const,
+
+    #[token(",")]
+    Comma,
+
+    #[token("<")]
+    LeftAngleBracket,
+
+    #[token(">")]
+    RightAngleBracket,
+
+    #[token("=")]
+    Equal,
+
+    #[token("==")]
+    EqualEqual,
+
+    #[token(">=")]
+    GreaterEqual,
+
+    #[token("<=")]
+    LesserEqual,
+
+    #[token("&")]
+    BitAnd,
+
+    #[token("|")]
+    BitOr,
+
+    #[token("||")]
+    Or,
+
+    #[token("&&")]
+    And,
+
+    #[token(":")]
+    Colon,
+
+    #[token("?")]
+    QuestionMark,
+
+    #[token("::")]
+    DoubleColon,
+
+    #[token("!")]
+    Not,
+
+    #[token("!=")]
+    NotEqual,
+}
+
+fn parse_string_slice<'lex>(lex: &mut logos::Lexer<'lex, Token<'lex>>) -> Option<&'lex str> {
+    let slice = lex.slice();
+    Some(&slice[1..slice.len() - 1])
 }
 
 impl<'t> ToString for Token<'t> {
@@ -84,10 +147,30 @@ impl<'t> ToString for Token<'t> {
             Token::Star => format!("*"),
             Token::Slash => format!("/"),
             Token::LineComment(comment) => format!("{}", comment),
-            Token::Space => format!(" "),
+            Token::Space(spc) => format!("{}", spc),
             Token::Tab => format!("\t"),
             Token::Newline => format!("\n"),
             Token::CarriageReturnNewLine => format!("\r\n"),
+            Token::Modulo => format!("%"),
+            Token::StringLiteral(s) => format!("\"{}\"", s),
+            Token::Let => format!("let"),
+            Token::Const => format!("const"),
+            Token::Comma => format!(","),
+            Token::LeftAngleBracket => format!("<"),
+            Token::RightAngleBracket => format!(">"),
+            Token::Equal => format!("="),
+            Token::EqualEqual => format!("=="),
+            Token::GreaterEqual => format!(">="),
+            Token::LesserEqual => format!("<="),
+            Token::BitAnd => format!("&"),
+            Token::BitOr => format!("|"),
+            Token::Or => format!("||"),
+            Token::And => format!("&&"),
+            Token::Colon => format!(":"),
+            Token::QuestionMark => format!("?"),
+            Token::DoubleColon => format!("::"),
+            Token::Not => format!("!"),
+            Token::NotEqual => format!("!="),
         }
     }
 }
@@ -100,6 +183,7 @@ mod tests {
     #[test]
     fn test_logos_lexer() {
         let source = "fn main() -> f64 { return 1 + 1.25; }";
+
         let output: String = Token::lexer(source)
             .map(|token| token.unwrap().to_string())
             .collect::<String>();
@@ -112,6 +196,43 @@ mod tests {
     #[test]
     fn test_number_lexing() {
         let source = "42 3.14 123.456";
+
+        let output = Token::lexer(source)
+            .map(|token| token.unwrap().to_string())
+            .collect::<String>();
+
+        assert_eq!(source, output);
+    }
+
+    #[test]
+    fn test_full_language() {
+        let source = r#"
+            fn main(thing : Whatever) -> Result<String> {
+            // this is a comment
+            // this is also a comment
+                let x: u32 = 2;
+                const y: i32 = 3;
+                let stringliteral2123asdf = "string is here";
+                x: u64 = x + 5;
+                let thing: isize = if (x == 2) { x } else { y };
+                let y = 2;
+
+                if (y != 2) {
+                    print("this is amazing");
+                }
+
+                let z: f64 = 0.02;
+                print(x,y,z);
+            }
+        "#;
+
+        let thing = source;
+
+        let output = Token::lexer(thing);
+
+        for lex in output {
+            println!("{:?}", lex)
+        }
 
         let output = Token::lexer(source)
             .map(|token| token.unwrap().to_string())
