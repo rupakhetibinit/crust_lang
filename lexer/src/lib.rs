@@ -1,3 +1,5 @@
+use std::{iter::Peekable, ops::Range};
+
 use logos::Logos;
 
 #[derive(Logos, Debug, PartialEq)]
@@ -239,5 +241,52 @@ mod tests {
             .collect::<String>();
 
         assert_eq!(source, output);
+    }
+}
+
+pub struct SpannedToken<'t> {
+    pub token: Token<'t>,
+    pub span: Range<usize>,
+}
+
+pub struct Lexer<'l> {
+    tokens: Peekable<std::vec::IntoIter<SpannedToken<'l>>>,
+}
+
+impl<'t> Lexer<'t> {
+    pub fn new(source: &'t str) -> Lexer<'t> {
+        let mut lex = Token::lexer(source);
+
+        let mut tokens = Vec::new();
+        let mut errors = Vec::<String>::new();
+
+        while let Some(result) = lex.next() {
+            let span = lex.span();
+
+            match result {
+                Ok(token) => {
+                    tokens.push(SpannedToken { token, span });
+                }
+                Err(_) => {
+                    errors.push(format!(
+                        "Lexing error at {:?} '{}' ",
+                        span,
+                        &source[span.clone()]
+                    ));
+                }
+            }
+        }
+
+        Lexer {
+            tokens: tokens.into_iter().peekable(),
+        }
+    }
+
+    pub fn peek(&mut self) -> Option<&SpannedToken<'t>> {
+        self.tokens.peek()
+    }
+
+    pub fn next(&mut self) -> Option<SpannedToken<'t>> {
+        self.tokens.next()
     }
 }
