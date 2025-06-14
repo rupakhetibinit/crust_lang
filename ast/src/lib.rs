@@ -1,14 +1,48 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+#[derive(Debug, Clone)]
+pub enum AstNode<'a> {
+    FunctionDecl {
+        params: Vec<ValueType<'a>>,
+        block: Vec<AstNodeId>,
+        return_type: Type<'a>,
+    },
+    LetStatement {
+        value: ValueType<'a>,
+        expr: AstNodeId,
+    },
+    BinaryExpression(AstNodeId, BinOp, AstNodeId),
+    UnaryExpression(UnaryOp, AstNodeId),
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub type AstNodeId = usize;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+#[derive(Debug, Clone)]
+pub struct ValueType<'t> {
+    name: &'t str,
+    annotated_type: Type<'t>,
+}
+
+#[derive(Debug, Clone)]
+pub enum Type<'t> {
+    TypeValue(&'t str),
+    InferrableType,
+}
+
+#[derive(Debug, Clone)]
+pub enum BinOp {
+    Add,
+    Sub,
+    Multiply,
+    Divide,
+    Modulo,
+    Or,
+    And,
+    NotEqual,
+    Equal,
+}
+
+#[derive(Debug, Clone)]
+pub enum UnaryOp {
+    Plus,
+    Minus,
+    Not,
 }
