@@ -1,3 +1,5 @@
+use std::fmt::format;
+
 use logos::Logos;
 
 #[derive(Logos, Debug, PartialEq)]
@@ -8,8 +10,17 @@ pub enum Token<'t> {
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*")]
     Ident(&'t str),
 
-    #[regex(r"[ \t\n\f]+")]
-    Whitespace,
+    #[token(" ")]
+    Space,
+
+    #[token("\t")]
+    Tab,
+
+    #[token("\n")]
+    Newline,
+
+    #[token("\r\n")]
+    CarriageReturnNewLine,
 
     #[token("(")]
     LParen,
@@ -20,11 +31,11 @@ pub enum Token<'t> {
     #[token("fn")]
     Fn,
 
-    #[regex(r"[0-9]+\.[0-9]+", priority = 4)]
-    Float(&'t str),
+    #[regex(r"[0-9]+\.[0-9]+", |lex| lex.slice().parse::<f64>().unwrap())]
+    Float(f64),
 
-    #[regex(r"[0-9]+", priority = 3)]
-    Int(&'t str),
+    #[regex(r"[0-9]+", |lex| lex.slice().parse::<i64>().unwrap())]
+    Int(i64),
 
     #[token("{")]
     LBrace,
@@ -40,6 +51,45 @@ pub enum Token<'t> {
 
     #[token("+")]
     Plus,
+
+    #[token("-")]
+    Minus,
+
+    #[token("*")]
+    Star,
+
+    #[token("/")]
+    Slash,
+
+    #[regex(r"//[^\n]*", |lex| lex.slice().to_string())]
+    LineComment(String),
+}
+
+impl<'t> ToString for Token<'t> {
+    fn to_string(&self) -> String {
+        match self {
+            Token::Arrow => format!("->"),
+            Token::Ident(ident) => format!("{}", ident),
+            Token::LParen => format!("("),
+            Token::RParen => format!(")"),
+            Token::Fn => format!("fn"),
+            Token::Float(f) => format!("{}", f),
+            Token::Int(i) => format!("{}", i),
+            Token::LBrace => format!("{{"),
+            Token::RBrace => format!("}}"),
+            Token::Semicolon => format!(";"),
+            Token::Return => format!("return"),
+            Token::Plus => format!("+"),
+            Token::Minus => format!("-"),
+            Token::Star => format!("*"),
+            Token::Slash => format!("/"),
+            Token::LineComment(comment) => format!("{}", comment),
+            Token::Space => format!(" "),
+            Token::Tab => format!("\t"),
+            Token::Newline => format!("\n"),
+            Token::CarriageReturnNewLine => format!("\r\n"),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -50,52 +100,23 @@ mod tests {
     #[test]
     fn test_logos_lexer() {
         let source = "fn main() -> f64 { return 1 + 1.25; }";
-        let lex = Token::lexer(source);
+        let output: String = Token::lexer(source)
+            .map(|token| token.unwrap().to_string())
+            .collect::<String>();
 
-        let lexed = [
-            Token::Fn,
-            Token::Whitespace,
-            Token::Ident("main"),
-            Token::LParen,
-            Token::RParen,
-            Token::Whitespace,
-            Token::Arrow,
-            Token::Whitespace,
-            Token::Ident("f64"),
-            Token::Whitespace,
-            Token::LBrace,
-            Token::Whitespace,
-            Token::Return,
-            Token::Whitespace,
-            Token::Int("1"),
-            Token::Whitespace,
-            Token::Plus,
-            Token::Whitespace,
-            Token::Float("1.25"),
-            Token::Semicolon,
-            Token::Whitespace,
-            Token::RBrace,
-        ];
-        for (actual, expected) in lex.zip(lexed).into_iter() {
-            assert_eq!(actual.unwrap(), expected);
-        }
+        let expected = "fn main() -> f64 { return 1 + 1.25; }";
+
+        assert_eq!(expected, output);
     }
 
     #[test]
     fn test_number_lexing() {
         let source = "42 3.14 123.456";
-        let lex = Token::lexer(source);
 
-        let lexed = [
-            Token::Int("42"),
-            Token::Whitespace,
-            Token::Float("3.14"),
-            Token::Whitespace,
-            Token::Float("123.456"),
-        ];
+        let output = Token::lexer(source)
+            .map(|token| token.unwrap().to_string())
+            .collect::<String>();
 
-        for (actual, expected) in lex.zip(lexed).into_iter() {
-            assert_eq!(actual.unwrap(), expected);
-        }
+        assert_eq!(source, output);
     }
 }
