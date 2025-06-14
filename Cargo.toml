@@ -1,3 +1,10 @@
 [workspace]
-members = ["crust", "backend/interpreter", "backend/bytecode"]
+members = [
+    "crust",
+    "backend/interpreter",
+    "backend/bytecode",
+    "lexer",
+    "parser",
+    "ast",
+]
 resolver = "3"
