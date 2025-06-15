@@ -7,7 +7,7 @@ struct Cli {
     #[clap(subcommand)]
     command: Command,
 
-    #[arg(short, long, value_enum, default_value_t = Backend::Interpreter)]
+    #[arg(short, long, value_enum, default_value_t = Backend::BytecodeVM)]
     backend: Backend,
 }
 

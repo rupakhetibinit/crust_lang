@@ -1,28 +1,43 @@
 use logos::Logos;
 
-use super::Token;
+use crate::Token;
+
 #[test]
 fn test_logos_lexer() {
     let source = "fn main() -> f64 { return 1 + 1.25; }";
 
-    let output: String = Token::lexer(source)
-        .map(|token| token.unwrap().to_string())
-        .collect::<String>();
+    let tokens: Vec<Token> = Token::lexer(source).map(|token| token.unwrap()).collect();
 
-    let expected = "fn main() -> f64 { return 1 + 1.25; }";
-
-    assert_eq!(expected, output);
+    assert_eq!(
+        tokens,
+        vec![
+            Token::Fn,
+            Token::Ident("main"),
+            Token::LParen,
+            Token::RParen,
+            Token::Arrow,
+            Token::Ident("f64"),
+            Token::LBrace,
+            Token::Return,
+            Token::Int(1),
+            Token::Plus,
+            Token::Float(1.25),
+            Token::Semicolon,
+            Token::RBrace,
+        ]
+    );
 }
 
 #[test]
 fn test_number_lexing() {
     let source = "42 3.14 123.456";
 
-    let output = Token::lexer(source)
-        .map(|token| token.unwrap().to_string())
-        .collect::<String>();
+    let tokens: Vec<Token> = Token::lexer(source).map(|token| token.unwrap()).collect();
 
-    assert_eq!(source, output);
+    assert_eq!(
+        tokens,
+        vec![Token::Int(42), Token::Float(3.14), Token::Float(123.456),]
+    );
 }
 
 #[test]
@@ -47,17 +62,58 @@ fn test_full_language() {
             }
         "#;
 
-    let thing = source;
+    let tokens: Vec<Token> = Token::lexer(source).map(|token| token.unwrap()).collect();
 
-    let output = Token::lexer(thing);
+    assert!(tokens.contains(&Token::Fn));
+    assert!(tokens.contains(&Token::Arrow));
+    assert!(tokens.contains(&Token::Let));
+    assert!(tokens.contains(&Token::Const));
 
-    for lex in output {
-        println!("{:?}", lex)
+    let token_pairs: Vec<(&Token, &Token)> = tokens.iter().zip(tokens.iter().skip(1)).collect();
+
+    for (t1, t2) in token_pairs.iter() {
+        if let Token::Let = t1 {
+            if let Token::Ident(_) = t2 {
+            } else {
+                panic!("'let' not followed by identifier");
+            }
+        }
     }
+}
 
-    let output = Token::lexer(source)
-        .map(|token| token.unwrap().to_string())
-        .collect::<String>();
+#[test]
+fn test_comments() {
+    let source = "// This is a comment\nlet x = 5;";
 
-    assert_eq!(source, output);
+    let tokens: Vec<Token> = Token::lexer(source).map(|token| token.unwrap()).collect();
+
+    assert_eq!(
+        tokens,
+        vec![
+            Token::LineComment("// This is a comment".into()),
+            Token::Let,
+            Token::Ident("x"),
+            Token::Equal,
+            Token::Int(5),
+            Token::Semicolon,
+        ]
+    );
+}
+
+#[test]
+fn test_string_literals() {
+    let source = r#"let msg = "Hello, world!";"#;
+
+    let tokens: Vec<Token> = Token::lexer(source).map(|token| token.unwrap()).collect();
+
+    assert_eq!(
+        tokens,
+        vec![
+            Token::Let,
+            Token::Ident("msg"),
+            Token::Equal,
+            Token::StringLiteral("Hello, world!"),
+            Token::Semicolon,
+        ]
+    );
 }
