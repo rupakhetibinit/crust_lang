@@ -7,6 +7,6 @@ fn factorial(n) {
         return n * factorial(n-1);
     }
 }
-for(let i = 0; i < 10; i++) { 
+for(let i = 0; i < 5; i++) { 
     print(factorial(i));
 }
