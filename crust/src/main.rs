@@ -1,3 +1,4 @@
+use bytecode::vm::CrustVM;
 use clap::{Parser, Subcommand};
 use interpreter::crust::Crust;
 
@@ -6,8 +7,8 @@ struct Cli {
     #[clap(subcommand)]
     command: Command,
 
-    #[arg(short, long, default_value = "interpreter")]
-    backend: Option<String>,
+    #[arg(short, long, value_enum, default_value_t = Backend::BytecodeVM)]
+    backend: Backend,
 }
 
 #[derive(Subcommand)]
@@ -16,24 +17,28 @@ enum Command {
     Repl {},
 }
 
+#[derive(Clone, Debug, clap::ValueEnum)]
+enum Backend {
+    Interpreter,
+    BytecodeVM,
+}
+
 fn main() {
     let cli = Cli::parse();
 
-    let mut crust = Crust::new();
+    let mut crust_interpreter = Crust::new();
+    let bytecode_vm = CrustVM::new();
 
-    if let Some(backend) = cli.backend {
-        if backend != "interpreter" {
-            eprintln!("Unsupported backend: {}", backend);
-            return;
+    match (cli.backend, cli.command) {
+        (Backend::Interpreter, Command::Run { file_path }) => {
+            crust_interpreter.run_file(&file_path);
         }
-    }
-
-    match cli.command {
-        Command::Run { file_path } => {
-            crust.run_file(&file_path);
+        (Backend::Interpreter, Command::Repl {}) => {
+            crust_interpreter.repl();
         }
-        Command::Repl {} => {
-            crust.repl();
+        (Backend::BytecodeVM, Command::Run { file_path }) => {
+            _ = bytecode_vm.run(&file_path);
         }
+        (Backend::BytecodeVM, Command::Repl {}) => todo!(),
     }
 }
