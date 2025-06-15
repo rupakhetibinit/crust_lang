@@ -15,6 +15,19 @@ pub enum UntypedAstNode<'u> {
     ReturnStatement {
         value: UntypedAstNodeId,
     },
+    FunctionDefinition {
+        name: &'u str,
+        parameters: Vec<Parameter<'u>>,
+        return_type: TypeAnnotation<'u>,
+        body: UntypedAstNodeId,
+    },
+    Block(Vec<UntypedAstNodeId>),
+}
+
+#[derive(Debug, Clone)]
+pub struct Parameter<'u> {
+    pub name: &'u str,
+    pub ty: TypeAnnotation<'u>,
 }
 
 #[derive(Debug, Clone)]

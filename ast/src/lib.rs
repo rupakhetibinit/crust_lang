@@ -4,5 +4,5 @@ mod untyped;
 pub use typed::AstNode;
 pub use typed::AstNodeId;
 pub use untyped::{
-    LiteralValue, TypeAnnotation, UntypedAstArena, UntypedAstNode, UntypedAstNodeId,
+    LiteralValue, Parameter, TypeAnnotation, UntypedAstArena, UntypedAstNode, UntypedAstNodeId,
 };

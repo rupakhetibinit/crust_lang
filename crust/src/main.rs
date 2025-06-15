@@ -37,7 +37,7 @@ fn main() {
             crust_interpreter.repl();
         }
         (Backend::BytecodeVM, Command::Run { file_path }) => {
-            bytecode_vm.run(&file_path);
+            _ = bytecode_vm.run(&file_path);
         }
         (Backend::BytecodeVM, Command::Repl {}) => todo!(),
     }

@@ -166,6 +166,7 @@ impl<'t> ToString for Token<'t> {
     }
 }
 
+#[derive(Debug)]
 pub struct SpannedToken<'t> {
     pub token: Token<'t>,
     pub span: Range<usize>,
