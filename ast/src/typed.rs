@@ -37,6 +37,7 @@ pub enum AstNode<'arena> {
 
 pub type AstNodeId = usize;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct ValueType<'t> {
     name: &'t str,

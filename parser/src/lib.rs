@@ -37,9 +37,12 @@ impl<'p> Parser<'p> {
     fn parse_statement(&mut self) -> Result<UntypedAstNodeId, ParserError> {
         match self.peek() {
             Some(SpannedToken {
-                token: lexer::Token::Let,
-                ..
+                token: Token::Let, ..
             }) => self.parse_let_statement(),
+            Some(SpannedToken {
+                token: Token::Return,
+                ..
+            }) => self.parse_return_statement(),
             _ => self.parse_expression(),
         }
     }
@@ -58,6 +61,7 @@ impl<'p> Parser<'p> {
         }
     }
 
+    #[allow(dead_code)]
     fn expect_keyword(&mut self, keyword: &str) -> Result<(), ParserError> {
         if let Some(tok) = self.advance() {
             if let lexer::Token::Ident(ident) = tok.token {
@@ -70,17 +74,19 @@ impl<'p> Parser<'p> {
     }
 
     fn parse_expression(&mut self) -> Result<usize, ParserError> {
-        let expression = match self.advance() {
+        let node = match self.advance() {
             Some(SpannedToken {
-                token: Token::Int(x),
+                token: Token::Int(i),
                 ..
-            }) => *x,
+            }) => UntypedAstNode::Literal(LiteralValue::Int(*i)),
+            Some(SpannedToken {
+                token: Token::Float(f),
+                ..
+            }) => UntypedAstNode::Literal(LiteralValue::Float(*f)),
             _ => return Err(ParserError::Error),
         };
 
-        Ok(self
-            .arena
-            .alloc(UntypedAstNode::Literal(LiteralValue::Int(expression))))
+        Ok(self.arena.alloc(node))
     }
 
     fn parse_let_statement(&mut self) -> Result<usize, ParserError> {
@@ -130,6 +136,16 @@ impl<'p> Parser<'p> {
 
         Ok(self.arena.alloc(stmt))
     }
+
+    fn parse_return_statement(&mut self) -> Result<usize, ParserError> {
+        self.advance();
+
+        let expr = self.parse_expression()?;
+
+        let stmt = UntypedAstNode::ReturnStatement { value: expr };
+
+        Ok(self.arena.alloc(stmt))
+    }
 }
 
 #[derive(Debug)]
@@ -176,6 +192,10 @@ pub fn print_ast(root_id: UntypedAstNodeId, arena: &UntypedAstArena<'_>) {
                     LiteralValue::Int(i) => println!("{} Int {}", indent_str, i),
                     LiteralValue::Float(f) => println!("{} Float {}", indent_str, f),
                 }
+            }
+            UntypedAstNode::ReturnStatement { value } => {
+                println!("{}ReturnStatement", indent_str);
+                print_node(*value, arena, indent + 2);
             }
             other => {
                 println!("{}Other node: {:?}", indent_str, other);

@@ -12,6 +12,9 @@ pub enum UntypedAstNode<'u> {
         ty: Option<TypeAnnotation<'u>>,
         value: UntypedAstNodeId,
     },
+    ReturnStatement {
+        value: UntypedAstNodeId,
+    },
 }
 
 #[derive(Debug, Clone)]
