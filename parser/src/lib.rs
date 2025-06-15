@@ -1,4 +1,4 @@
-use ast::{TypeAnnotation, UntypedAstArena, UntypedAstNode, UntypedAstNodeId};
+use ast::{LiteralValue, TypeAnnotation, UntypedAstArena, UntypedAstNode, UntypedAstNodeId};
 use lexer::{SpannedToken, Token};
 
 pub struct Parser<'p> {
@@ -69,8 +69,18 @@ impl<'p> Parser<'p> {
         Err(ParserError::Error)
     }
 
-    fn parse_expression(&self) -> Result<usize, ParserError> {
-        todo!()
+    fn parse_expression(&mut self) -> Result<usize, ParserError> {
+        let expression = match self.advance() {
+            Some(SpannedToken {
+                token: Token::Int(x),
+                ..
+            }) => *x,
+            _ => return Err(ParserError::Error),
+        };
+
+        Ok(self
+            .arena
+            .alloc(UntypedAstNode::Literal(LiteralValue::Int(expression))))
     }
 
     fn parse_let_statement(&mut self) -> Result<usize, ParserError> {
@@ -158,6 +168,14 @@ pub fn print_ast(root_id: UntypedAstNodeId, arena: &UntypedAstArena<'_>) {
                 }
                 println!("{}  Value:", indent_str);
                 print_node(*value, arena, indent + 2);
+            }
+            UntypedAstNode::Literal(x) => {
+                println!("{}Literal Value", indent_str);
+                match x {
+                    LiteralValue::RawString(x) => println!("{} String {}", indent_str, x),
+                    LiteralValue::Int(i) => println!("{} Int {}", indent_str, i),
+                    LiteralValue::Float(f) => println!("{} Float {}", indent_str, f),
+                }
             }
             other => {
                 println!("{}Other node: {:?}", indent_str, other);
