@@ -58,6 +58,10 @@ impl<'p> Parser<'p> {
         let token = self.consume()?;
 
         let node = match &token.token {
+            Token::Ident(_) => {
+                let node = self.parse_expr_primary()?;
+                node
+            }
             Token::Int(i) => UntypedAstNode::Literal(LiteralValue::Int(*i)),
             Token::Float(f) => UntypedAstNode::Literal(LiteralValue::Float(*f)),
             _ => {
@@ -67,10 +71,12 @@ impl<'p> Parser<'p> {
             }
         };
 
-        Ok(self.arena.alloc(node))
+        let id = self.arena.alloc(node);
+
+        return Ok(id);
     }
 
-    fn parse_let_statement_inner(&mut self) -> Result<usize, ParserError> {
+    fn parse_let_statement_inner(&mut self) -> Result<UntypedAstNodeId, ParserError> {
         self.expect_token(Token::Let)?;
 
         let identifier = self.expect_identifier()?;
@@ -166,14 +172,18 @@ impl<'p> Parser<'p> {
                 self.consume()?;
                 Ok(())
             }
-            Some(token) => Err(ParserError::UnexpectedToken {
-                expected: token_to_string(&expected),
-                found: token_to_string(&token.token),
-                span: Some(token.span.clone()),
-            }),
-            None => Err(ParserError::UnexpectedEndOfInput {
-                expected: token_to_string(&expected),
-            }),
+            Some(token) => {
+                return Err(ParserError::UnexpectedToken {
+                    expected: token_to_string(&expected),
+                    found: token_to_string(&token.token),
+                    span: Some(token.span.clone()),
+                });
+            }
+            None => {
+                return Err(ParserError::UnexpectedEndOfInput {
+                    expected: token_to_string(&expected),
+                });
+            }
         }
     }
 
@@ -324,6 +334,50 @@ impl<'p> Parser<'p> {
         }
 
         LocatedParserError::new(0, 0, error)
+    }
+
+    fn parse_expr_primary(&mut self) -> Result<UntypedAstNode<'p>, ParserError> {
+        let token = self.consume()?;
+
+        match token.token {
+            Token::Ident(_) => todo!(),
+            Token::LParen => todo!(),
+            Token::RParen => todo!(),
+            Token::Fn => todo!(),
+            Token::Float(_) => todo!(),
+            Token::Int(_) => todo!(),
+            Token::LBrace => todo!(),
+            Token::RBrace => todo!(),
+            Token::Semicolon => todo!(),
+            Token::Return => todo!(),
+            Token::Plus => todo!(),
+            Token::Minus => todo!(),
+            Token::Star => todo!(),
+            Token::Slash => todo!(),
+            Token::LineComment(_) => todo!(),
+            Token::Modulo => todo!(),
+            Token::StringLiteral(_) => todo!(),
+            Token::Let => todo!(),
+            Token::Const => todo!(),
+            Token::Comma => todo!(),
+            Token::LeftAngleBracket => todo!(),
+            Token::RightAngleBracket => todo!(),
+            Token::Equal => todo!(),
+            Token::EqualEqual => todo!(),
+            Token::GreaterEqual => todo!(),
+            Token::LesserEqual => todo!(),
+            Token::BitAnd => todo!(),
+            Token::BitOr => todo!(),
+            Token::Or => todo!(),
+            Token::And => todo!(),
+            Token::Colon => todo!(),
+            Token::QuestionMark => todo!(),
+            Token::DoubleColon => todo!(),
+            Token::Not => todo!(),
+            Token::NotEqual => todo!(),
+            Token::Dot => todo!(),
+            Token::Arrow => todo!(),
+        }
     }
 }
 fn extract_span_from_error(error: &ParserError) -> Option<std::ops::Range<usize>> {

@@ -1,6 +1,6 @@
 fn main(x: i32, y: i32) -> i32 {
 }
 
-fn test(x : i32, y: ) -> {
-
+fn test(x : i32, y:f32 ) -> f32 {
+    return x + y;
 }

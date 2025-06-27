@@ -22,6 +22,7 @@ pub enum UntypedAstNode<'u> {
         body: UntypedAstNodeId,
     },
     Block(Vec<UntypedAstNodeId>),
+    Ident(&'u str),
 }
 
 #[derive(Debug, Clone)]
