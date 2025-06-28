@@ -1,0 +1,6 @@
+fn main(x: i32, y: i32) -> i32 {
+}
+
+// This is a comment
+fn test(x : i32, y : f32, z : String) -> f32 {
+}
