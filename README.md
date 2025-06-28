@@ -1,9 +1,13 @@
 # Crust Programming Language
 A language written in the Rust Programming Language.
 
-# TODO:
+# DONE:
 - Interpreter
-- VM Backend
+
+# TODO:
+- Typed and Untyped AST
+- Bytecode IR
+- Bytecode VM Backend
 - LLVM Backend with Inkwell
 
 # Basic Demo
