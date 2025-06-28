@@ -1,33 +1,33 @@
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
-pub enum AstNode<'arena> {
+pub enum AstNode {
     Program {
         statements: Vec<AstNodeId>,
     },
     FunctionDecl {
-        params: Vec<ValueType<'arena>>,
+        params: Vec<ValueType>,
         block: AstNodeId,
-        return_type: Type<'arena>,
+        return_type: Type,
     },
     Block {
         statements: Vec<AstNodeId>,
     },
     LetStatement {
-        value: ValueType<'arena>,
+        value: ValueType,
         expr: AstNodeId,
     },
     BinaryExpression(AstNodeId, BinOp, AstNodeId),
     UnaryExpression(UnaryOp, AstNodeId),
     StructDecl {
-        name: &'arena str,
+        name: String,
         methods: Vec<AstNodeId>,
-        fields: HashMap<&'arena str, ValueType<'arena>>,
+        fields: HashMap<String, ValueType>,
     },
     StructMethodDecl {
-        params: Vec<ValueType<'arena>>,
+        params: Vec<ValueType>,
         block: Vec<AstNodeId>,
-        return_type: Type<'arena>,
+        return_type: Type,
     },
     FunctionCall {
         args: Vec<AstNodeId>,
@@ -39,14 +39,14 @@ pub type AstNodeId = usize;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
-pub struct ValueType<'t> {
-    name: &'t str,
-    annotated_type: Type<'t>,
+pub struct ValueType {
+    name: String,
+    annotated_type: Type,
 }
 
 #[derive(Debug, Clone)]
-pub enum Type<'t> {
-    TypeValue(&'t str),
+pub enum Type {
+    TypeValue(String),
     InferrableType,
 }
 

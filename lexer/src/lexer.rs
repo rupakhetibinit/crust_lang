@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use logos::Logos;
 
-#[derive(Logos, Debug, PartialEq)]
+#[derive(Logos, Debug, PartialEq, Clone)]
 pub enum Token<'t> {
     #[regex(r"[ \t\n\r\f]+", logos::skip)]
     #[token("->")]
@@ -166,7 +166,7 @@ impl<'t> ToString for Token<'t> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SpannedToken<'t> {
     pub token: Token<'t>,
     pub span: Range<usize>,

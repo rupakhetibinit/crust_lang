@@ -1,5 +1,6 @@
 use ast::{
-    LiteralValue, Parameter, TypeAnnotation, UntypedAstArena, UntypedAstNode, UntypedAstNodeId,
+    BinOp, LiteralValue, Parameter, TypeAnnotation, UntypedAstArena, UntypedAstNode,
+    UntypedAstNodeId,
 };
 use lexer::{SpannedToken, Token};
 use thiserror::Error;
@@ -7,7 +8,7 @@ use thiserror::Error;
 pub struct Parser<'p> {
     tokens: &'p [SpannedToken<'p>],
     pos: usize,
-    arena: UntypedAstArena<'p>,
+    arena: UntypedAstArena,
     source_text: &'p str,
 }
 
@@ -21,7 +22,7 @@ impl<'p> Parser<'p> {
         }
     }
 
-    pub fn parse(&mut self) -> Result<(UntypedAstNodeId, UntypedAstArena<'p>), LocatedParserError> {
+    pub fn parse(&mut self) -> Result<(UntypedAstNodeId, UntypedAstArena), LocatedParserError> {
         let root_id = self.parse_program()?;
         Ok((root_id, std::mem::take(&mut self.arena)))
     }
@@ -47,22 +48,25 @@ impl<'p> Parser<'p> {
             Some(Token::Let) => self.parse_let_statement_inner(),
             Some(Token::Return) => self.parse_return_statement_inner(),
             Some(Token::LineComment(_)) => self.parse_comment(),
-            _ => self.parse_expression_inner(),
+            _ => self.parse_primary(),
         };
 
         result.map_err(|e| self.with_location(e))
     }
 
-    fn parse_expression_inner(&mut self) -> Result<UntypedAstNodeId, ParserError> {
+    fn parse_primary(&mut self) -> Result<UntypedAstNodeId, ParserError> {
         let token = self.consume()?;
 
         let node = match &token.token {
-            Token::Ident(_) => {
-                let node = self.parse_expr_primary()?;
-                node
-            }
+            Token::Ident(name) => UntypedAstNode::Ident(name.to_string()),
             Token::Int(i) => UntypedAstNode::Literal(LiteralValue::Int(*i)),
             Token::Float(f) => UntypedAstNode::Literal(LiteralValue::Float(*f)),
+            Token::LParen => {
+                let inner_expr = self.parse_expr_inner(0)?;
+                self.expect_token(Token::RParen)?;
+                return Ok(inner_expr);
+            }
+
             _ => {
                 return Err(ParserError::InvalidExpression {
                     token: token_to_string(&token.token),
@@ -75,6 +79,54 @@ impl<'p> Parser<'p> {
         return Ok(id);
     }
 
+    fn parse_expr_inner(&mut self, min_prec: u8) -> Result<UntypedAstNodeId, ParserError> {
+        let mut left = self.parse_primary()?;
+
+        loop {
+            let op_token = match self.current_token().cloned() {
+                Some(
+                    tok @ SpannedToken {
+                        token:
+                            Token::Plus
+                            | Token::Minus
+                            | Token::Star
+                            | Token::Slash
+                            | Token::Modulo
+                            | Token::Or
+                            | Token::And
+                            | Token::NotEqual
+                            | Token::EqualEqual
+                            | Token::GreaterEqual
+                            | Token::LesserEqual
+                            | Token::BitAnd
+                            | Token::BitOr,
+                        ..
+                    },
+                ) => tok,
+                _ => return Ok(left),
+            };
+
+            let (prec, bin_op) = match self.get_binop_prec_and_kind(&op_token.token) {
+                Some((prec, bin_op)) if prec >= min_prec => (prec, bin_op),
+                _ => break,
+            };
+
+            self.consume()?;
+
+            let right = self.parse_expr_inner(prec + 1)?;
+
+            let node = UntypedAstNode::BinaryExpression {
+                left,
+                op: bin_op,
+                right,
+            };
+
+            left = self.arena.alloc(node);
+        }
+
+        Ok(left)
+    }
+
     fn parse_let_statement_inner(&mut self) -> Result<UntypedAstNodeId, ParserError> {
         self.expect_token(Token::Let)?;
 
@@ -82,7 +134,7 @@ impl<'p> Parser<'p> {
 
         let ty = if self.match_and_consume(Token::Colon) {
             let ty = self.expect_identifier()?;
-            Some(TypeAnnotation { ty })
+            Some(TypeAnnotation { ty: ty.to_owned() })
         } else {
             None
         };
@@ -95,10 +147,10 @@ impl<'p> Parser<'p> {
             return Err(ParserError::ExpectedAssignment { found });
         }
 
-        let value_expr = self.parse_expression_inner()?;
+        let value_expr = self.parse_expr_inner(0)?;
 
         let stmt = UntypedAstNode::LetStatement {
-            identifier,
+            identifier: identifier.to_owned(),
             ty,
             value: value_expr,
         };
@@ -109,7 +161,7 @@ impl<'p> Parser<'p> {
     fn parse_return_statement_inner(&mut self) -> Result<usize, ParserError> {
         self.expect_token(Token::Return)?;
 
-        let expr = self.parse_expression_inner()?;
+        let expr = self.parse_expr_inner(0)?;
 
         Ok(self
             .arena
@@ -134,9 +186,11 @@ impl<'p> Parser<'p> {
         let fn_body = self.parse_block_inner()?;
 
         let function_node = UntypedAstNode::FunctionDefinition {
-            name: fn_name,
+            name: fn_name.to_owned(),
             parameters: fn_parameters,
-            return_type: TypeAnnotation { ty: fn_return_type },
+            return_type: TypeAnnotation {
+                ty: fn_return_type.to_owned(),
+            },
             body: fn_body,
         };
 
@@ -234,7 +288,7 @@ impl<'p> Parser<'p> {
         }
     }
 
-    fn parse_parameter_list(&mut self) -> Result<Vec<Parameter<'p>>, ParserError> {
+    fn parse_parameter_list(&mut self) -> Result<Vec<Parameter>, ParserError> {
         let mut parameters = Vec::new();
 
         if self.check_token(Token::RParen) {
@@ -247,8 +301,10 @@ impl<'p> Parser<'p> {
             let type_name = self.expect_type_annotation()?;
 
             parameters.push(Parameter {
-                name,
-                ty: TypeAnnotation { ty: type_name },
+                name: name.to_owned(),
+                ty: TypeAnnotation {
+                    ty: type_name.to_owned(),
+                },
             });
 
             if self.match_and_consume(Token::Comma) {
@@ -297,7 +353,7 @@ impl<'p> Parser<'p> {
                 token: Token::Return,
                 ..
             }) => self.parse_return_statement_inner(),
-            _ => self.parse_expression_inner(),
+            _ => self.parse_expr_inner(0),
         }
     }
 
@@ -335,48 +391,6 @@ impl<'p> Parser<'p> {
         LocatedParserError::new(0, 0, error)
     }
 
-    fn parse_expr_primary(&mut self) -> Result<UntypedAstNode<'p>, ParserError> {
-        let token = self.consume()?;
-
-        match token.token {
-            Token::Ident(_) => todo!(),
-            Token::LParen => todo!(),
-            Token::RParen => todo!(),
-            Token::Fn => todo!(),
-            Token::Float(_) => todo!(),
-            Token::Int(_) => todo!(),
-            Token::LBrace => todo!(),
-            Token::RBrace => todo!(),
-            Token::Semicolon => todo!(),
-            Token::Return => todo!(),
-            // Token::Plus | Token::Minus | Token::Star | Token::Slash => self.parse_with_precedence(),
-            Token::LineComment(_) => todo!(),
-            Token::Modulo => todo!(),
-            Token::StringLiteral(_) => todo!(),
-            Token::Let => todo!(),
-            Token::Const => todo!(),
-            Token::Comma => todo!(),
-            Token::LeftAngleBracket => todo!(),
-            Token::RightAngleBracket => todo!(),
-            Token::Equal => todo!(),
-            Token::EqualEqual => todo!(),
-            Token::GreaterEqual => todo!(),
-            Token::LesserEqual => todo!(),
-            Token::BitAnd => todo!(),
-            Token::BitOr => todo!(),
-            Token::Or => todo!(),
-            Token::And => todo!(),
-            Token::Colon => todo!(),
-            Token::QuestionMark => todo!(),
-            Token::DoubleColon => todo!(),
-            Token::Not => todo!(),
-            Token::NotEqual => todo!(),
-            Token::Dot => todo!(),
-            Token::Arrow => todo!(),
-            _ => todo!(),
-        }
-    }
-
     fn parse_comment(&mut self) -> Result<UntypedAstNodeId, ParserError> {
         let token_pos = self.pos;
 
@@ -392,9 +406,18 @@ impl<'p> Parser<'p> {
             _ => unreachable!(),
         };
 
-        let node = UntypedAstNode::Comment(comment_text);
+        let node = UntypedAstNode::Comment(comment_text.to_owned());
         let id = self.arena.alloc(node);
         Ok(id)
+    }
+    fn get_binop_prec_and_kind(&self, token: &Token<'p>) -> Option<(u8, BinOp)> {
+        match token {
+            Token::Plus => Some((10, BinOp::Add)),
+            Token::Minus => Some((10, BinOp::Sub)),
+            Token::Star => Some((20, BinOp::Multiply)),
+            Token::Slash => Some((20, BinOp::Divide)),
+            _ => None,
+        }
     }
 }
 
@@ -592,8 +615,8 @@ impl LocatedParserError {
     }
 }
 
-pub fn print_ast(root_id: UntypedAstNodeId, arena: &UntypedAstArena<'_>) {
-    fn print_node(node_id: UntypedAstNodeId, arena: &UntypedAstArena<'_>, indent: usize) {
+pub fn print_ast(root_id: UntypedAstNodeId, arena: &UntypedAstArena) {
+    fn print_node(node_id: UntypedAstNodeId, arena: &UntypedAstArena, indent: usize) {
         let indent_str = "  ".repeat(indent);
         let node = arena.get(node_id);
 
@@ -658,6 +681,20 @@ pub fn print_ast(root_id: UntypedAstNodeId, arena: &UntypedAstArena<'_>) {
                 for stmt_id in statements {
                     print_node(*stmt_id, arena, indent + 1);
                 }
+            }
+            UntypedAstNode::BinaryExpression { left, op, right } => {
+                println!("{}BinaryExpression", indent_str);
+                println!("{}  Operator: {:?}", indent_str, op);
+                println!("{}  Left:", indent_str);
+                print_node(*left, arena, indent + 1);
+                println!("{}  Right:", indent_str);
+                print_node(*right, arena, indent + 1);
+            }
+            UntypedAstNode::Ident(name) => {
+                println!("{}Identifier: {}", indent_str, name);
+            }
+            UntypedAstNode::Comment(comment) => {
+                println!("{}Comment: {}", indent_str, comment);
             }
             other => {
                 println!("{}Other node: {:?}", indent_str, other);
