@@ -37,17 +37,16 @@ impl<'p> Parser<'p> {
     }
 
     fn parse_statement(&mut self) -> Result<UntypedAstNodeId, LocatedParserError> {
-        let result = match self.current_token() {
-            Some(SpannedToken {
-                token: Token::Fn, ..
-            }) => self.parse_fn_definition_inner(),
-            Some(SpannedToken {
-                token: Token::Let, ..
-            }) => self.parse_let_statement_inner(),
-            Some(SpannedToken {
-                token: Token::Return,
-                ..
-            }) => self.parse_return_statement_inner(),
+        let token_type = {
+            let current = self.current_token();
+            current.map(|st| &st.token) // Get a reference to the token type
+        };
+
+        let result = match token_type {
+            Some(Token::Fn) => self.parse_fn_definition_inner(),
+            Some(Token::Let) => self.parse_let_statement_inner(),
+            Some(Token::Return) => self.parse_return_statement_inner(),
+            Some(Token::LineComment(_)) => self.parse_comment(),
             _ => self.parse_expression_inner(),
         };
 
@@ -350,10 +349,7 @@ impl<'p> Parser<'p> {
             Token::RBrace => todo!(),
             Token::Semicolon => todo!(),
             Token::Return => todo!(),
-            Token::Plus => todo!(),
-            Token::Minus => todo!(),
-            Token::Star => todo!(),
-            Token::Slash => todo!(),
+            // Token::Plus | Token::Minus | Token::Star | Token::Slash => self.parse_with_precedence(),
             Token::LineComment(_) => todo!(),
             Token::Modulo => todo!(),
             Token::StringLiteral(_) => todo!(),
@@ -377,9 +373,31 @@ impl<'p> Parser<'p> {
             Token::NotEqual => todo!(),
             Token::Dot => todo!(),
             Token::Arrow => todo!(),
+            _ => todo!(),
         }
     }
+
+    fn parse_comment(&mut self) -> Result<UntypedAstNodeId, ParserError> {
+        let token_pos = self.pos;
+
+        let token = self.consume()?;
+
+        match &token.token {
+            Token::LineComment(_) => {}
+            _ => unreachable!(),
+        };
+
+        let comment_text = match &self.tokens[token_pos].token {
+            Token::LineComment(text) => text,
+            _ => unreachable!(),
+        };
+
+        let node = UntypedAstNode::Comment(comment_text);
+        let id = self.arena.alloc(node);
+        Ok(id)
+    }
 }
+
 fn extract_span_from_error(error: &ParserError) -> Option<std::ops::Range<usize>> {
     match error {
         ParserError::UnexpectedToken { span, .. } => span.clone(),
@@ -615,6 +633,31 @@ pub fn print_ast(root_id: UntypedAstNodeId, arena: &UntypedAstArena<'_>) {
             UntypedAstNode::ReturnStatement { value } => {
                 println!("{}ReturnStatement", indent_str);
                 print_node(*value, arena, indent + 2);
+            }
+            UntypedAstNode::FunctionDefinition {
+                name,
+                parameters,
+                return_type,
+                body,
+            } => {
+                println!("{}Function Declaration", indent_str);
+                println!("{}  Name: {}", indent_str, name);
+                println!("{}  Parameters:", indent_str);
+                for param in parameters {
+                    println!("{}    {}: {}", indent_str, param.name, param.ty.ty);
+                }
+                println!("{}  Return Type: {}", indent_str, return_type.ty);
+                println!("{}  Body:", indent_str);
+                print_node(*body, arena, indent + 2);
+            }
+            UntypedAstNode::Block(statements) => {
+                println!("{}Block", indent_str);
+                if statements.is_empty() {
+                    println!("{}  <empty>", indent_str);
+                }
+                for stmt_id in statements {
+                    print_node(*stmt_id, arena, indent + 1);
+                }
             }
             other => {
                 println!("{}Other node: {:?}", indent_str, other);
