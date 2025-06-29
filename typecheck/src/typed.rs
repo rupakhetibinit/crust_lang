@@ -1,74 +1,69 @@
-use std::{collections::HashMap, fmt::Display};
+use ast::{BinOp, LiteralValue, Parameter, TypeAnnotation, UnaryOp};
 
-use ast::{BinOp, LiteralValue};
+pub type TypedAstNodeId = usize;
 
 #[derive(Debug, Clone)]
-pub enum AstNode {
-    Program {
-        statements: Vec<AstNodeId>,
+pub enum TypedAstNode {
+    BinaryExpression {
+        left: TypedAstNodeId,
+        op: BinOp,
+        right: TypedAstNodeId,
+        result_type: Type,
     },
-    FunctionDecl {
-        params: Vec<TypedValueType>,
-        block: AstNodeId,
-        return_type: TypedType,
+    Literal {
+        value: LiteralValue,
+        literal_type: Type,
+    },
+    Program {
+        statements: Vec<TypedAstNodeId>,
+    },
+
+    LetStatement {
+        identifier: String,
+        declared_type: Type,
+        value: TypedAstNodeId,
+    },
+    ReturnStatement {
+        value: TypedAstNodeId,
+        return_type: Type,
+    },
+    FunctionDefinition {
+        name: String,
+        parameters: Vec<TypedParameter>,
+        return_type: Type,
+        body: TypedAstNodeId,
+        function_type: Type,
     },
     Block {
-        statements: Vec<AstNodeId>,
+        statements: Vec<TypedAstNodeId>,
     },
-    LetStatement {
-        value: TypedValueType,
-        expr: AstNodeId,
-    },
-    BinaryExpression(AstNodeId, TypedBinOp, AstNodeId, TypedType),
-    UnaryExpression(TypedUnaryOp, AstNodeId),
-    StructDecl {
+    Identifier {
         name: String,
-        methods: Vec<AstNodeId>,
-        fields: HashMap<String, TypedValueType>,
+        resolved_type: Type,
     },
-    StructMethodDecl {
-        params: Vec<TypedValueType>,
-        block: Vec<AstNodeId>,
-        return_type: TypedType,
+    Comment(String),
+    ForLoop {
+        initializer: TypedAstNodeId,
+        condition: TypedAstNodeId,
+        increment: TypedAstNodeId,
+        block: TypedAstNodeId,
+    },
+    UnaryExpression {
+        op: UnaryOp,
+        expression: TypedAstNodeId,
+        result_type: Type,
     },
     FunctionCall {
-        args: Vec<AstNodeId>,
+        callee: String,
+        arguments: Vec<TypedAstNodeId>,
+        return_type: Type,
     },
-    StructMethodCall {},
-    Literal(TypedLiteralValue),
 }
 
-impl AstNode {
-    pub fn get_type(&self) -> Option<&TypedType> {
-        match self {
-            AstNode::FunctionDecl { return_type, .. } => Some(return_type),
-            AstNode::LetStatement { value, .. } => Some(&value.actual_type),
-            AstNode::BinaryExpression(_, _, _, expr) => Some(expr),
-            AstNode::UnaryExpression(_, _) => None,
-            AstNode::StructDecl { .. } => None,
-            AstNode::StructMethodDecl { return_type, .. } => Some(return_type),
-            AstNode::FunctionCall { .. } => None,
-            AstNode::StructMethodCall { .. } => None,
-            AstNode::Literal(_) => None,
-            _ => None,
-        }
-    }
-}
-
-impl From<TypedType> for Type {
-    fn from(value: TypedType) -> Self {
-        match value {
-            TypedType::TypeValue(x) => match x.as_str() {
-                "i64" => Type::I64,
-                "i32" => Type::I32,
-                "f64" => Type::I64,
-                "string" => Type::String,
-                "f32" => Type::F32,
-                "void" => Type::Void,
-                y => Type::CustomType(y.to_owned()),
-            },
-        }
-    }
+#[derive(Debug, Clone)]
+pub struct TypedParameter {
+    pub name: String,
+    pub param_type: Type,
 }
 
 impl From<String> for Type {
@@ -84,78 +79,22 @@ impl From<String> for Type {
         }
     }
 }
-
-#[derive(Debug, Clone)]
-pub enum TypedLiteralValue {
-    Int(i64),
-    Float(f64),
-    String(String),
-    Bool(bool),
-}
-
-pub type AstNodeId = usize;
-
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub struct TypedValueType {
-    pub name: String,
-    pub actual_type: TypedValueType,
-}
-
-#[derive(Debug, Clone)]
-pub enum TypedType {
-    TypeValue(String),
-}
-
-#[derive(Debug, Clone)]
-pub enum TypedBinOp {
-    Add,
-    Sub,
-    Multiply,
-    Divide,
-    Modulo,
-    Or,
-    And,
-    NotEqual,
-    Equal,
-    GreaterEqual,
-    LesserEqual,
-}
-
-#[derive(Debug, Clone)]
-pub enum TypedUnaryOp {
-    Plus,
-    Minus,
-    Not,
-    PlusPlus,
-    MinusMinus,
-}
-
-impl From<&LiteralValue> for TypedLiteralValue {
-    fn from(value: &LiteralValue) -> Self {
-        match value {
-            LiteralValue::Int(i) => TypedLiteralValue::Int(*i),
-            LiteralValue::Float(f) => TypedLiteralValue::Float(*f),
-            LiteralValue::RawString(s) => TypedLiteralValue::String(s.clone()),
-            LiteralValue::Bool(b) => TypedLiteralValue::Bool(*b),
+impl From<&Parameter> for TypedParameter {
+    fn from(param: &Parameter) -> Self {
+        TypedParameter {
+            name: param.name.clone(),
+            param_type: Type::from(&param.ty),
         }
     }
 }
 
-impl From<BinOp> for TypedBinOp {
-    fn from(op: BinOp) -> Self {
-        match op {
-            BinOp::Add => TypedBinOp::Add,
-            BinOp::Sub => TypedBinOp::Sub,
-            BinOp::Multiply => TypedBinOp::Multiply,
-            BinOp::Divide => TypedBinOp::Divide,
-            BinOp::Modulo => TypedBinOp::Modulo,
-            BinOp::Or => TypedBinOp::Or,
-            BinOp::And => TypedBinOp::And,
-            BinOp::NotEqual => TypedBinOp::NotEqual,
-            BinOp::Equal => TypedBinOp::Equal,
-            BinOp::LesserEqual => TypedBinOp::LesserEqual,
-            BinOp::GreaterEqual => TypedBinOp::GreaterEqual,
+impl From<&LiteralValue> for Type {
+    fn from(value: &LiteralValue) -> Self {
+        match value {
+            LiteralValue::RawString(_) => Type::String,
+            LiteralValue::Int(_) => Type::I64,
+            LiteralValue::Float(_) => Type::F64,
+            LiteralValue::Bool(_) => Type::Bool,
         }
     }
 }
@@ -170,4 +109,43 @@ pub enum Type {
     Bool,
     Void,
     CustomType(String),
+    Function {
+        params: Vec<Type>,
+        return_type: Box<Type>,
+    },
+}
+
+impl From<&TypeAnnotation> for Type {
+    fn from(value: &TypeAnnotation) -> Self {
+        match value.ty.as_str() {
+            "i32" => Type::I32,
+            "i64" => Type::I64,
+            "f32" => Type::F32,
+            "f64" => Type::F64,
+            "string" => Type::String,
+            "bool" => Type::Bool,
+            "void" => Type::Void,
+            custom => Type::CustomType(custom.to_string()),
+        }
+    }
+}
+
+impl TypedAstNode {
+    pub fn get_type(&self) -> Option<&Type> {
+        match self {
+            TypedAstNode::BinaryExpression { result_type, .. } => Some(result_type),
+            TypedAstNode::Literal { literal_type, .. } => Some(literal_type),
+            TypedAstNode::LetStatement { declared_type, .. } => Some(declared_type),
+            TypedAstNode::ReturnStatement { return_type, .. } => Some(return_type),
+            TypedAstNode::FunctionDefinition { function_type, .. } => Some(function_type),
+            TypedAstNode::Identifier { resolved_type, .. } => Some(resolved_type),
+            TypedAstNode::UnaryExpression { result_type, .. } => Some(result_type),
+            TypedAstNode::FunctionCall { return_type, .. } => Some(return_type),
+            // These nodes don't have types
+            TypedAstNode::Program { .. } => None,
+            TypedAstNode::Block { .. } => None,
+            TypedAstNode::Comment(_) => None,
+            TypedAstNode::ForLoop { .. } => None,
+        }
+    }
 }
