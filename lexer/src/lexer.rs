@@ -20,6 +20,9 @@ pub enum Token<'t> {
     #[token("fn")]
     Fn,
 
+    #[token("for")]
+    For,
+
     #[regex(r"[0-9]+\.[0-9]+", |lex| lex.slice().parse::<f64>().unwrap())]
     Float(f64),
 
@@ -41,8 +44,14 @@ pub enum Token<'t> {
     #[token("+")]
     Plus,
 
+    #[token("++")]
+    PlusPlus,
+
     #[token("-")]
     Minus,
+
+    #[token("--")]
+    MinusMinus,
 
     #[token("*")]
     Star,
@@ -162,6 +171,9 @@ impl<'t> ToString for Token<'t> {
             Token::Not => format!("!"),
             Token::NotEqual => format!("!="),
             Token::Dot => format!("."),
+            Token::For => format!("for"),
+            Token::PlusPlus => format!("++"),
+            Token::MinusMinus => format!("--"),
         }
     }
 }

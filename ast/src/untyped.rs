@@ -24,6 +24,16 @@ pub enum UntypedAstNode {
     Block(Vec<UntypedAstNodeId>),
     Ident(String),
     Comment(String),
+    ForLoop {
+        initializer: UntypedAstNodeId,
+        condition: UntypedAstNodeId,
+        increment: UntypedAstNodeId,
+        block: UntypedAstNodeId,
+    },
+    UnaryExpression {
+        op: UnaryOp,
+        expression: UntypedAstNodeId,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -52,6 +62,18 @@ pub enum BinOp {
     And,
     NotEqual,
     Equal,
+    LesserEqual,
+    GreaterEqual,
+}
+
+#[derive(Debug, Clone)]
+pub enum UnaryOp {
+    Negate,
+    Not,
+    PreIncrement,
+    PreDecrement,
+    PostIncrement,
+    PostDecrement,
 }
 
 #[derive(Debug, Clone)]
