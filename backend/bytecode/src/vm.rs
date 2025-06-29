@@ -2,6 +2,7 @@ use std::fs;
 
 use lexer::Lexer;
 use parser::Parser;
+use typecheck::TypeChecker;
 
 pub struct CrustVM {}
 
@@ -28,7 +29,13 @@ impl CrustVM {
             }
         };
 
-        parser::print_ast(root_id, &arena);
+        let mut type_checker = TypeChecker::new(arena);
+
+        type_checker.type_check(root_id).map_err(|error| {
+            eprintln!("{}", error);
+        })?;
+
+        // parser::print_ast(root_id, &arena);
         Ok(())
     }
 }
