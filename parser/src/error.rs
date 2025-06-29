@@ -47,6 +47,9 @@ pub enum ParserError {
 
     #[error("Empty parameter list not allowed")]
     EmptyParameterList,
+
+    #[error("Type error: {message}")]
+    TypeError { message: String },
 }
 
 #[derive(Error, Debug)]

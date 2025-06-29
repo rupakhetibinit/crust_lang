@@ -63,9 +63,43 @@ impl<'p> Parser<'p> {
 
     fn parse_primary(&mut self) -> Result<UntypedAstNodeId, ParserError> {
         let span_token = self.consume()?;
+        let token = span_token.token.clone();
 
-        let node = match &span_token.token {
-            Token::Ident(name) => UntypedAstNode::Ident(name.to_string()),
+        let node = match &token {
+            Token::Ident(name) => {
+                // Check if the next token is a left parenthesis, indicating a function call
+                if self.match_and_consume(Token::LParen) {
+                    // It's a function call
+                    let mut args = Vec::new();
+
+                    if !self.check_token(Token::RParen) {
+                        loop {
+                            args.push(self.parse_expr_inner(0)?);
+
+                            if self.match_and_consume(Token::Comma) {
+                                continue;
+                            } else if self.check_token(Token::RParen) {
+                                break;
+                            } else {
+                                let found = self
+                                    .current_token()
+                                    .map(|t| t.token.to_string())
+                                    .unwrap_or_else(|| "end of input".to_string());
+                                return Err(ParserError::ExpectedCommaOrClosingParen { found });
+                            }
+                        }
+                    }
+
+                    self.expect_token(Token::RParen)?;
+
+                    UntypedAstNode::FunctionCall {
+                        callee: name.to_string(),
+                        arguments: args,
+                    }
+                } else {
+                    UntypedAstNode::Ident(name.to_string())
+                }
+            }
             Token::Int(i) => UntypedAstNode::Literal(LiteralValue::Int(*i)),
             Token::Float(f) => UntypedAstNode::Literal(LiteralValue::Float(*f)),
             Token::LParen => {
@@ -571,6 +605,7 @@ pub fn print_ast(root_id: UntypedAstNodeId, arena: &UntypedAstArena) {
                     LiteralValue::RawString(x) => println!("{} String {}", indent_str, x),
                     LiteralValue::Int(i) => println!("{} Int {}", indent_str, i),
                     LiteralValue::Float(f) => println!("{} Float {}", indent_str, f),
+                    LiteralValue::Bool(b) => println!("{} Boolean {}", indent_str, b),
                 }
             }
             UntypedAstNode::ReturnStatement { value } => {
@@ -637,6 +672,19 @@ pub fn print_ast(root_id: UntypedAstNodeId, arena: &UntypedAstArena) {
                 println!("{}  Operator: {:?}", indent_str, op);
                 println!("{}  Expression:", indent_str);
                 print_node(*expression, arena, indent + 1);
+            }
+            UntypedAstNode::FunctionCall { callee, arguments } => {
+                println!("{}FunctionCall", indent_str);
+                println!("{}  FunctinName:", indent_str);
+                println!("{}    {}", indent_str, callee);
+                if arguments.is_empty() {
+                    println!("{}  Arguments: <none>", indent_str);
+                } else {
+                    println!("{}  Arguments:", indent_str);
+                    for arg_id in arguments {
+                        print_node(*arg_id, arena, indent + 1);
+                    }
+                }
             }
         }
     }

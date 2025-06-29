@@ -34,6 +34,10 @@ pub enum UntypedAstNode {
         op: UnaryOp,
         expression: UntypedAstNodeId,
     },
+    FunctionCall {
+        callee: String,
+        arguments: Vec<UntypedAstNodeId>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -47,6 +51,7 @@ pub enum LiteralValue {
     RawString(String),
     Int(i64),
     Float(f64),
+    Bool(bool),
 }
 
 pub type UntypedAstNodeId = usize;

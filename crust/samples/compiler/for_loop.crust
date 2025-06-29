@@ -2,6 +2,9 @@ for(let i = 0; i <=5 ; i++) {
     let x = i * i;
 }
 
+
 for(let i = 0; i <=5 ; ++i) {
-    let x = i * i;
+    let x  = i * i;
+    let x = 2.0;
+    let y : f64 = x * 0.5;
 }

@@ -95,6 +95,7 @@ version = "0.1.0"
 dependencies = [
  "lexer",
  "parser",
+ "typecheck",
 ]
 
 [[package]]
@@ -647,6 +648,10 @@ dependencies = [
 [[package]]
 name = "typecheck"
 version = "0.1.0"
+dependencies = [
+ "ast",
+ "parser",
+]
 
 [[package]]
 name = "unicode-ident"
