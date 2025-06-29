@@ -1,40 +1,50 @@
 #[derive(Debug, Clone)]
-pub enum UntypedAstNode<'u> {
+pub enum UntypedAstNode {
     BinaryExpression {
         left: UntypedAstNodeId,
         op: BinOp,
         right: UntypedAstNodeId,
     },
-    Literal(LiteralValue<'u>),
+    Literal(LiteralValue),
     Program(Vec<UntypedAstNodeId>),
     LetStatement {
-        identifier: &'u str,
-        ty: Option<TypeAnnotation<'u>>,
+        identifier: String,
+        ty: Option<TypeAnnotation>,
         value: UntypedAstNodeId,
     },
     ReturnStatement {
         value: UntypedAstNodeId,
     },
     FunctionDefinition {
-        name: &'u str,
-        parameters: Vec<Parameter<'u>>,
-        return_type: TypeAnnotation<'u>,
+        name: String,
+        parameters: Vec<Parameter>,
+        return_type: TypeAnnotation,
         body: UntypedAstNodeId,
     },
     Block(Vec<UntypedAstNodeId>),
-    Ident(&'u str),
-    Comment(&'u str),
+    Ident(String),
+    Comment(String),
+    ForLoop {
+        initializer: UntypedAstNodeId,
+        condition: UntypedAstNodeId,
+        increment: UntypedAstNodeId,
+        block: UntypedAstNodeId,
+    },
+    UnaryExpression {
+        op: UnaryOp,
+        expression: UntypedAstNodeId,
+    },
 }
 
 #[derive(Debug, Clone)]
-pub struct Parameter<'u> {
-    pub name: &'u str,
-    pub ty: TypeAnnotation<'u>,
+pub struct Parameter {
+    pub name: String,
+    pub ty: TypeAnnotation,
 }
 
 #[derive(Debug, Clone)]
-pub enum LiteralValue<'u> {
-    RawString(&'u str),
+pub enum LiteralValue {
+    RawString(String),
     Int(i64),
     Float(f64),
 }
@@ -52,30 +62,42 @@ pub enum BinOp {
     And,
     NotEqual,
     Equal,
+    LesserEqual,
+    GreaterEqual,
 }
 
 #[derive(Debug, Clone)]
-pub struct TypeAnnotation<'u> {
-    pub ty: &'u str,
+pub enum UnaryOp {
+    Negate,
+    Not,
+    PreIncrement,
+    PreDecrement,
+    PostIncrement,
+    PostDecrement,
+}
+
+#[derive(Debug, Clone)]
+pub struct TypeAnnotation {
+    pub ty: String,
 }
 
 #[derive(Default)]
-pub struct UntypedAstArena<'arena> {
-    nodes: Vec<UntypedAstNode<'arena>>,
+pub struct UntypedAstArena {
+    nodes: Vec<UntypedAstNode>,
 }
 
-impl<'arena> UntypedAstArena<'arena> {
-    pub fn alloc(&mut self, node: UntypedAstNode<'arena>) -> UntypedAstNodeId {
+impl UntypedAstArena {
+    pub fn alloc(&mut self, node: UntypedAstNode) -> UntypedAstNodeId {
         let id = self.nodes.len();
         self.nodes.push(node);
         id
     }
 
-    pub fn get(&self, id: UntypedAstNodeId) -> &UntypedAstNode<'arena> {
+    pub fn get(&self, id: UntypedAstNodeId) -> &UntypedAstNode {
         &self.nodes[id]
     }
 
-    pub fn nodes(&self) -> &[UntypedAstNode<'arena>] {
+    pub fn nodes(&self) -> &[UntypedAstNode] {
         &self.nodes
     }
 }
