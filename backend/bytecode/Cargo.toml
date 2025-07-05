@@ -7,3 +7,4 @@ edition = "2024"
 parser = { path = "../../parser" }
 lexer = { path = "../../lexer" }
 typecheck = { path = "../../typecheck" }
+ast = { path = "../../ast" }

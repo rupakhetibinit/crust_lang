@@ -1,0 +1,4 @@
+fn main() -> i64 {
+    let z = 2 * 22;
+    return z;
+}
