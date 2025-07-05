@@ -10,6 +10,17 @@ pub enum Value {
     String(String),
 }
 
+impl std::fmt::Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Int(i) => f.write_str(&i.to_string()),
+            Value::Float(fl) => f.write_str(&fl.to_string()),
+            Value::Bool(b) => f.write_str(&b.to_string()),
+            Value::String(s) => f.write_str(s),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct VirtualMachine {
     stack: Vec<Value>,
@@ -76,10 +87,14 @@ impl VirtualMachine {
             }
             OpCode::Return => {
                 let val = self.stack.pop().expect("stack underflow");
-                println!("{:?}", val);
+                println!("Program Returned {:?}", val);
             }
             OpCode::Halt => {
                 return;
+            }
+            OpCode::Print => {
+                let val = self.stack.pop().expect("Stack underflow");
+                println!("{}", val);
             }
             _ => panic!("Unsupported opcode: {:?}", op),
         }

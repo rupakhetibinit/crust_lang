@@ -71,6 +71,9 @@ impl Chunk {
                 OpCode::Halt => {
                     println!("HALT");
                 }
+                OpCode::Print => {
+                    println!("PRINT");
+                }
                 _ => {
                     println!("UNKNOWN {:?}", op);
                 }

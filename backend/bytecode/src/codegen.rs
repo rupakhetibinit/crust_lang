@@ -105,11 +105,18 @@ impl CodeGen {
                 callee,
                 arguments,
                 return_type,
-            } => todo!(),
+            } => {
+                if callee == "print" {
+                    let arguments = arguments.get(0).unwrap();
+                    self.generate_node(*arguments, chunk);
+                    chunk.emit(OpCode::Print);
+                }
+            }
         }
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum ConstantType {
     Int(i64),
     Float(f64),
@@ -128,4 +135,5 @@ pub enum OpCode {
     Call(String),
     Return,
     Halt,
+    Print,
 }

@@ -54,10 +54,22 @@ pub struct TypeChecker {
 
 impl TypeChecker {
     pub fn new(untyped_arena: UntypedAstArena) -> Self {
+        let mut scopes = vec![HashMap::new()];
+
+        scopes[0].insert(
+            "print".to_string(),
+            SymbolInfo {
+                symbol_type: Type::Function {
+                    params: vec![Type::Any],
+                    return_type: Box::new(Type::Void),
+                },
+            },
+        );
+
         Self {
             untyped_arena,
             typed_arena: TypedAstArena::default(),
-            scopes: vec![HashMap::new()],
+            scopes,
             current_function_return_type: None,
             errors: Vec::new(),
         }
@@ -260,7 +272,7 @@ impl TypeChecker {
                         let typed_arg = self.check_node(arg_id)?;
                         let arg_type = self.typed_arena.get(typed_arg).get_type().unwrap();
 
-                        if arg_type != &params[i] {
+                        if arg_type != &params[i] && params[i] != Type::Any {
                             return Err(TypeError::TypeMismatch {
                                 expected: params[i].clone(),
                                 found: arg_type.clone(),

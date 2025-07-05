@@ -1,4 +1,5 @@
-fn main() -> i64 {
+fn main() -> void {
     let z = 2 * 22;
-    return z;
+    print("This is a test");
+    print(z);
 }
