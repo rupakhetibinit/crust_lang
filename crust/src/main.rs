@@ -14,6 +14,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     Run { file_path: String },
+    Disassemble { file_path: String },
     Repl {},
 }
 
@@ -39,6 +40,9 @@ fn main() {
         (Backend::BytecodeVM, Command::Run { file_path }) => {
             _ = bytecode_vm.run(&file_path);
         }
-        (Backend::BytecodeVM, Command::Repl {}) => todo!(),
+        (Backend::BytecodeVM, Command::Disassemble { file_path }) => {
+            _ = bytecode_vm.disassemble(&file_path);
+        }
+        _ => panic!("Not supported"),
     }
 }

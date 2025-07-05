@@ -113,6 +113,7 @@ pub enum Type {
         params: Vec<Type>,
         return_type: Box<Type>,
     },
+    Any,
 }
 
 impl From<&TypeAnnotation> for Type {

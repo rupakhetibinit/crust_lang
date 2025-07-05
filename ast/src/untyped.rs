@@ -21,6 +21,7 @@ pub enum UntypedAstNode {
         return_type: TypeAnnotation,
         body: UntypedAstNodeId,
     },
+
     Block(Vec<UntypedAstNodeId>),
     Ident(String),
     Comment(String),

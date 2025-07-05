@@ -1,0 +1,5 @@
+fn main() -> void {
+    let z = 2 * 22;
+    print("This is a test");
+    print(z);
+}

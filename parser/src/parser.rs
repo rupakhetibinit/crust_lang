@@ -102,6 +102,9 @@ impl<'p> Parser<'p> {
             }
             Token::Int(i) => UntypedAstNode::Literal(LiteralValue::Int(*i)),
             Token::Float(f) => UntypedAstNode::Literal(LiteralValue::Float(*f)),
+            Token::StringLiteral(raw_string) => {
+                UntypedAstNode::Literal(LiteralValue::RawString(raw_string.to_string()))
+            }
             Token::LParen => {
                 let inner_expr = self.parse_expr_inner(0)?;
                 self.expect_token(Token::RParen)?;
