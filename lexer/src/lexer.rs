@@ -62,6 +62,9 @@ pub enum Token<'t> {
     #[regex(r"//[^\n]*", |lex| lex.slice().to_string())]
     LineComment(String),
 
+    #[regex(r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/", |lex| lex.slice().to_string())]
+    MultiLineComment(String),
+
     #[token("%")]
     Modulo,
 
@@ -174,6 +177,7 @@ impl<'t> ToString for Token<'t> {
             Token::For => format!("for"),
             Token::PlusPlus => format!("++"),
             Token::MinusMinus => format!("--"),
+            Token::MultiLineComment(comment) => format!("{}", comment),
         }
     }
 }

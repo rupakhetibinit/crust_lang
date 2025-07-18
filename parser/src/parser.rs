@@ -53,7 +53,7 @@ impl<'p> Parser<'p> {
             Some(Token::Fn) => self.parse_fn_definition_inner(),
             Some(Token::Let) => self.parse_let_statement_inner(),
             Some(Token::Return) => self.parse_return_statement_inner(),
-            Some(Token::LineComment(_)) => self.parse_comment(),
+            Some(Token::LineComment(_)) | Some(Token::MultiLineComment(_)) => self.parse_comment(),
             Some(Token::For) => self.parse_for_loop_inner(),
             _ => self.parse_primary(),
         };
@@ -442,11 +442,13 @@ impl<'p> Parser<'p> {
 
         match &token.token {
             Token::LineComment(_) => {}
+            Token::MultiLineComment(_) => {}
             _ => unreachable!(),
         };
 
         let comment_text = match &self.tokens[token_pos].token {
             Token::LineComment(text) => text,
+            Token::MultiLineComment(text) => text,
             _ => unreachable!(),
         };
 
