@@ -2,11 +2,10 @@ fn test() -> i64 {
     return 2;
 }
 
+/* This is a test for multi line comment with the 
+virtual machine and the bytecode compiler */
+
 fn main() -> void {
     let z = 2 * 22;
     print(z);
-    print("This is a test");
-    print(z);
-    let x = test();
-    print(x);
 }
