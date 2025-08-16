@@ -64,6 +64,7 @@ impl Chunk {
                     println!("CALL         {:>3} {:>3}  ; {}", idx, arity, name);
                 }
                 OpCode::AddF64 => println!("ADD_F64"),
+                OpCode::MulF64 => println!("MUL_F64"),
             }
         }
 

@@ -402,6 +402,12 @@ impl TypeChecker {
             (Type::F64, BinOp::Add | BinOp::Sub | BinOp::Multiply | BinOp::Divide, Type::F64) => {
                 Ok(Type::F64)
             }
+            (Type::F64, BinOp::Multiply, Type::I64) => Ok(Type::F64),
+            (Type::I64, BinOp::Multiply, Type::F64) => Ok(Type::F64),
+            (Type::I32, BinOp::Multiply, Type::I64) => Ok(Type::I64),
+            (Type::I64, BinOp::Multiply, Type::I32) => Ok(Type::I64),
+            (Type::F32, BinOp::Multiply, Type::I32) => Ok(Type::F32),
+            (Type::I32, BinOp::Multiply, Type::F32) => Ok(Type::F32),
 
             // Comparison operations
             (

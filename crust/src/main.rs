@@ -1,6 +1,7 @@
 use bytecode::vm::CrustVM;
 use clap::{Parser, Subcommand};
 use interpreter::crust::Crust;
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 #[derive(Parser)]
 struct Cli {
@@ -25,6 +26,17 @@ enum Backend {
 }
 
 fn main() {
+    let subscriber = FmtSubscriber::builder()
+        .with_env_filter(
+            EnvFilter::from_default_env().add_directive("your_crate=debug".parse().unwrap()),
+        )
+        .with_target(false) // Hide module paths for cleaner output
+        .with_thread_ids(true) // Show thread IDs if needed
+        .compact() // More compact output
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber).expect("Failed to set tracing subscriber");
+
     let cli = Cli::parse();
 
     let mut crust_interpreter = Crust::new();

@@ -1,3 +1,5 @@
+use tracing::{info, instrument};
+
 use crate::{
     chunk::Chunk,
     codegen::{ConstantType, FunctionObj, OpCode},
@@ -44,17 +46,15 @@ impl VirtualMachine {
         }
     }
 
+    #[instrument(skip(self, chunk))]
     pub fn run(&mut self, chunk: &Chunk) {
-        // println!(
-        //     "DEBUG: VM starting execution with {} instructions",
-        //     chunk.code.len()
-        // );
+        info!("Starting VM execution with chunk: {:?}", chunk);
         self.pc = 0;
         self.halted = false;
 
         while self.pc < chunk.code.len() && !self.halted {
             let op = &chunk.code[self.pc];
-            //println!("DEBUG: VM executing instruction {}: {:?}", self.pc, op);
+            info!("Executing instruction {}: {:?}", self.pc, op);
             self.pc += 1;
             self.execute(op, chunk);
         }
@@ -73,7 +73,7 @@ impl VirtualMachine {
                     ConstantType::String(s) => Value::String(s.clone()),
                     ConstantType::Function(function_obj) => Value::Function(function_obj.clone()),
                 };
-                //println!("DEBUG: LoadConst pushed {:?} onto stack", val);
+                info!("LoadConst({}) pushed {:?} onto stack", idx, val);
                 self.stack.push(val);
             }
             OpCode::LoadLocal(idx) => {
@@ -85,12 +85,12 @@ impl VirtualMachine {
                     );
                 }
                 let val = self.locals[*idx].clone();
-                //println!("DEBUG: LoadLocal({}) pushed {:?} onto stack", idx, val);
+                info!("LoadLocal({}) loaded {:?} from locals", idx, val);
                 self.stack.push(val);
             }
             OpCode::StoreLocal(idx) => {
                 let val = self.stack.pop().expect("stack underflow");
-                //println!("DEBUG: StoreLocal({}) storing {:?}", idx, val);
+                info!("StoreLocal({}) storing {:?} into locals", idx, val);
                 if *idx >= self.locals.len() {
                     self.locals.resize(*idx + 1, Value::Void);
                 }
@@ -100,48 +100,51 @@ impl VirtualMachine {
                 let right = self.pop_int();
                 let left = self.pop_int();
                 let result = left + right;
-                //println!("DEBUG: AddI64: {} + {} = {}", left, right, result);
+                info!("AddI64: {} + {} = {}", left, right, result);
                 self.stack.push(Value::Int(result));
             }
             OpCode::AddF64 => {
                 let right = self.pop_float();
                 let left = self.pop_float();
                 let result = left + right;
-                //println!("DEBUG: AddF64: {} + {} = {}", left, right, result);
+                info!("AddF64: {} + {} = {}", left, right, result);
                 self.stack.push(Value::Float(result));
             }
             OpCode::MulI64 => {
                 let right = self.pop_int();
                 let left = self.pop_int();
                 let result = left * right;
-                //println!("DEBUG: MulI64: {} * {} = {}", left, right, result);
+                info!("MulI64: {} * {} = {}", left, right, result);
                 self.stack.push(Value::Int(result));
             }
             OpCode::NegI64 => {
                 let val = self.pop_int();
                 let result = -val;
-                //println!("DEBUG: NegI64: -{} = {}", val, result);
+                info!("NegI64: -{} = {}", val, result);
                 self.stack.push(Value::Int(result));
             }
             OpCode::Return => {
-                //println!("DEBUG: Return instruction executed");
+                info!("Return instruction executed, popping return value from stack");
                 let return_value = self.stack.pop().unwrap_or(Value::Void);
                 self.stack.clear(); // clear locals
                 self.stack.push(return_value); // leave return value on stack
                 self.halted = true;
             }
             OpCode::Halt => {
-                //println!("DEBUG: Halt instruction executed");
+                info!("Halt instruction executed, stopping VM execution");
                 self.halted = true;
             }
             OpCode::Print => {
                 let val = self.stack.pop().expect("Stack underflow");
-                //println!("DEBUG: Print instruction - printing: {:?}", val);
+                info!(
+                    "Print instruction executed, popping value from stack: {:?}",
+                    val
+                );
 
                 // Print the value
                 match val {
                     Value::Function(func_obj) => {
-                        //println!("DEBUG: Cannot print function directly");
+                        info!("Print: Function object encountered: {}", func_obj.name);
                         println!("<function: {}>", func_obj.name);
                     }
                     _ => {
@@ -150,10 +153,10 @@ impl VirtualMachine {
                 }
             }
             OpCode::Call(arity, idx) => {
-                // println!(
-                //     "DEBUG: Call instruction - arity: {}, function index: {}",
-                //     arity, idx
-                // );
+                info!(
+                    "Call instruction with arity {} and function index {}",
+                    arity, idx
+                );
 
                 // Check if we have enough arguments on the stack
                 if self.stack.len() < *arity as usize {
@@ -168,7 +171,7 @@ impl VirtualMachine {
                 let mut args = Vec::with_capacity(*arity as usize);
                 for _ in 0..*arity {
                     let arg = self.stack.pop().expect("stack underflow");
-                    //println!("DEBUG: Collected argument {}: {:?}", i, arg);
+                    info!("Collected argument: {:?}", arg);
                     args.push(arg);
                 }
                 args.reverse(); // Arguments are pushed in reverse order
@@ -176,7 +179,10 @@ impl VirtualMachine {
                 // Get the function
                 let function = &chunk.constants[*idx];
                 if let ConstantType::Function(func_obj) = function {
-                    //println!("DEBUG: Calling function: {}", func_obj.name);
+                    info!(
+                        "Calling function: {} with arguments: {:?}",
+                        func_obj.name, args
+                    );
 
                     // Create a new VM for the function call
                     let mut function_vm = VirtualMachine::new();
@@ -197,15 +203,25 @@ impl VirtualMachine {
                     // If the function returned a value, push it onto our stack
                     if !function_vm.stack.is_empty() {
                         let return_value = function_vm.stack.last().unwrap().clone();
-                        //println!("DEBUG: Function returned: {:?}", return_value);
+                        info!(
+                            "Function {} returned value: {:?}",
+                            func_obj.name, return_value
+                        );
                         self.stack.push(return_value);
                     } else {
-                        //println!("DEBUG: Function returned void");
+                        info!("Function {} returned void", func_obj.name);
                         // For void functions, don't push anything
                     }
                 } else {
                     panic!("Expected a function constant at index {}", idx);
                 }
+            }
+            OpCode::MulF64 => {
+                let right = self.pop_float();
+                let left = self.pop_float();
+                let result = left * right;
+                info!("MulF64: {} * {} = {}", left, right, result);
+                self.stack.push(Value::Float(result));
             }
         }
     }
