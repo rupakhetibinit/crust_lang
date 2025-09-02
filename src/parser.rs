@@ -139,6 +139,7 @@ pub struct Parser {
     tokens: Vec<SpannedToken>,
     pos: usize,
     pub filename: String,
+    block_stack: Vec<Range<usize>>,
 }
 
 #[derive(Debug)]
@@ -148,6 +149,8 @@ pub struct ParseError {
     pub filename: String,
     pub note: Option<String>,
     pub secondary_span: Option<(String, Range<usize>)>,
+    pub label: Option<String>,
+    pub hint: Option<(String, Range<usize>)>,
 }
 
 pub type ParseResult<T> = Result<T, ParseError>;
@@ -158,6 +161,7 @@ impl Parser {
             tokens,
             pos: 0,
             filename,
+            block_stack: Vec::new(),
         }
     }
 
@@ -183,6 +187,8 @@ impl Parser {
                 filename: filename.clone(),
                 note: None,
                 secondary_span: None,
+                label: None,
+                hint: None,
             }),
             None => Err(ParseError {
                 message: format!("Expected {:?}, found EOF", kind),
@@ -190,6 +196,8 @@ impl Parser {
                 filename: filename.clone(),
                 note: None,
                 secondary_span: None,
+                label: None,
+                hint: None,
             }),
         }
     }
@@ -217,6 +225,8 @@ impl Parser {
                     secondary_span: None,
                     note: None,
                     filename: self.filename.clone(),
+                    label: None,
+                    hint: None,
                 }),
             },
             None => Err(ParseError {
@@ -225,6 +235,8 @@ impl Parser {
                 filename: self.filename.clone(),
                 note: None,
                 secondary_span: None,
+                label: None,
+                hint: None,
             }),
         }
     }
@@ -237,6 +249,8 @@ impl Parser {
             filename: filename.clone(),
             note: None,
             secondary_span: None,
+            label: None,
+            hint: None,
         })?;
 
         let name = match &name_tok.token {
@@ -248,6 +262,8 @@ impl Parser {
                     filename: filename.clone(),
                     note: None,
                     secondary_span: None,
+                    label: None,
+                    hint: None,
                 });
             }
         };
@@ -258,7 +274,6 @@ impl Parser {
 
         self.expect(Token::Arrow)?;
         let return_type = self.parse_type()?;
-        self.expect(Token::LBrace)?;
 
         let body = self.parse_block()?;
 
@@ -312,6 +327,8 @@ impl Parser {
             filename: filename.clone(),
             secondary_span: None,
             note: None,
+            label: None,
+            hint: None,
         })?;
 
         match &tok.token {
@@ -331,21 +348,56 @@ impl Parser {
                 filename: filename.clone(),
                 secondary_span: None,
                 note: None,
+                label: None,
+                hint: None,
             }),
         }
     }
 
-    fn parse_block(&mut self) -> ParseResult<Block> {
-        let mut stmts = Vec::new();
+    fn is_eof(&self) -> bool {
+        self.pos >= self.tokens.len()
+    }
 
-        while let Some(tok) = self.peek() {
-            match &tok.token {
-                Token::RBrace => {
-                    break;
-                }
-                _ => stmts.push(self.parse_stmt()?),
-            }
+    fn parse_block(&mut self) -> ParseResult<Block> {
+        let lbrace = self.expect(Token::LBrace)?;
+        self.block_stack.push(lbrace.span.clone());
+
+        let mut stmts = vec![];
+        while !self.check(Token::RBrace) && !self.is_eof() {
+            stmts.push(self.parse_stmt()?);
         }
+
+        if self.is_eof() {
+            // ERROR: unclosed block
+            let open_span = self.block_stack.pop().unwrap();
+
+            let current_span = self
+                .tokens
+                .last()
+                .map(|t| t.span.clone())
+                .unwrap_or(open_span.clone());
+
+            return Err(ParseError {
+                message: "this file contains an unclosed block".to_string(),
+                span: lbrace.span.clone(), // where we noticed
+                secondary_span: Some((
+                    "Blocks needs to be closed with the corresponding closing bracket".to_owned(),
+                    current_span.clone(),
+                )), // where it opened
+                filename: self.filename.clone(),
+                note: Some(format!(
+                    "Consider closing the current block with the respective bracket"
+                )),
+                label: Some(format!("block starts here")),
+                hint: Some((
+                    format!("hint: consider adding }} here"),
+                    current_span.clone().start + 1..current_span.clone().end + 1,
+                )),
+            });
+        }
+
+        self.expect(Token::RBrace)?;
+        self.block_stack.pop();
         Ok(Block { stmts })
     }
 
@@ -362,6 +414,8 @@ impl Parser {
                 filename: self.filename.clone(),
                 secondary_span: None,
                 note: None,
+                label: None,
+                hint: None,
             }),
         }
     }
@@ -374,6 +428,8 @@ impl Parser {
             filename: self.filename.clone(),
             note: None,
             secondary_span: None,
+            label: None,
+            hint: None,
         })?;
 
         let name = match &name_tok.token {
@@ -385,6 +441,8 @@ impl Parser {
                     filename: self.filename.clone(),
                     note: None,
                     secondary_span: None,
+                    label: None,
+                    hint: None,
                 });
             }
         };
@@ -608,6 +666,8 @@ impl Parser {
             filename: self.filename.clone(),
             note: None,
             secondary_span: None,
+            label: None,
+            hint: None,
         })?;
         match tok.token {
             Token::Int(i) => Ok(Expr::IntLiteral(i, Type::I64(tok.span.clone()), tok.span)),
@@ -624,6 +684,8 @@ impl Parser {
                 filename: self.filename.clone(),
                 note: None,
                 secondary_span: None,
+                label: None,
+                hint: None,
             }),
         }
     }
@@ -639,6 +701,8 @@ impl Parser {
             filename: self.filename.clone(),
             note: None,
             secondary_span: None,
+            label: None,
+            hint: None,
         })?;
 
         match tok.token {
@@ -649,6 +713,8 @@ impl Parser {
                 filename: self.filename.clone(),
                 note: None,
                 secondary_span: None,
+                label: None,
+                hint: None,
             }),
         }
     }
@@ -658,12 +724,21 @@ use ariadne::{Color, Label, Report, ReportKind, Source};
 
 pub fn report_parse_error(source: &str, error: &ParseError) {
     let mut report = Report::build(ReportKind::Error, (&error.filename, error.span.clone()))
-        .with_message(&error.message)
-        .with_label(
+        .with_message(&error.message);
+
+    if let Some(label) = error.label.clone() {
+        report = report.with_label(
             Label::new((&error.filename, error.span.clone()))
-                .with_message("here")
+                .with_message(label)
                 .with_color(Color::Red),
         );
+    } else {
+        report = report.with_label(
+            Label::new((&error.filename, error.span.clone()))
+                .with_message("error occurs here")
+                .with_color(Color::Red),
+        );
+    }
 
     if let Some(note) = error.note.clone() {
         report = report.with_note(note);
@@ -673,9 +748,17 @@ pub fn report_parse_error(source: &str, error: &ParseError) {
         let span = sec_span.1;
         let message = sec_span.0;
         report = report.with_label(
-            Label::new((&error.filename, span))
+            Label::new((&error.filename, span.clone()))
                 .with_message(message)
                 .with_color(Color::Blue),
+        );
+    }
+
+    if let Some((help_msg, help_span)) = &error.hint {
+        report = report.with_label(
+            Label::new((&error.filename, help_span.start + 1..help_span.end + 1))
+                .with_message(help_msg)
+                .with_color(Color::Cyan),
         );
     }
 
@@ -683,4 +766,14 @@ pub fn report_parse_error(source: &str, error: &ParseError) {
         .finish()
         .print((&error.filename, Source::from(source)))
         .unwrap();
+}
+
+fn insertion_span_for_next_line(source: &str) -> Range<usize> {
+    // find the last newline in source
+    if let Some(pos) = source.rfind('\n') {
+        let start = pos + 1;
+        start..start // zero-width span at start of next line
+    } else {
+        0..0
+    }
 }

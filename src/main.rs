@@ -13,9 +13,13 @@ fn main() -> Result<(), ()> {
     let args = std::env::args();
     let args = args.skip(1);
 
-    let source =
-        "fn main(username: String, id: i64 ) -> i64  { let x = 2; let z = x + 3; return z; }"
-            .to_owned();
+    let source = "fn main(username: String, id: i64) -> i64  {
+            let x = 2;
+            return z;
+            print(x);
+
+            "
+    .to_owned();
 
     let lexer = Lexer::new(source.clone());
 
