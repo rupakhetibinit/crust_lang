@@ -1,8 +1,8 @@
-use std::{fmt::format, ops::Range};
+use std::ops::Range;
 
-use logos::{Logos, Span};
+use logos::Logos;
 
-#[derive(Logos, Debug, Clone)]
+#[derive(Logos, Debug, Clone, PartialEq)]
 pub enum Token {
     #[regex(r"[ \t\n\r\f]+", logos::skip)]
     #[token("->")]
@@ -186,6 +186,7 @@ impl<'t> ToString for Token {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct SpannedToken {
     pub token: Token,
     pub span: Range<usize>,
@@ -222,7 +223,7 @@ impl Lexer {
 
 #[cfg(test)]
 mod tests {
-    use crate::lexer::{Lexer, Token};
+    use crate::lexer::Lexer;
 
     #[test]
     pub fn lex_example_programs() {
