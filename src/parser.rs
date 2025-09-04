@@ -1,6 +1,9 @@
-use std::{io::ErrorKind, ops::Range};
+use std::{env::current_exe, io::ErrorKind, ops::Range};
 
-use crate::lexer::{SpannedToken, Token};
+use crate::{
+    error,
+    lexer::{SpannedToken, Token},
+};
 
 #[derive(Debug, Clone)]
 pub struct Program {
@@ -140,17 +143,33 @@ pub struct Parser {
     pos: usize,
     pub filename: String,
     block_stack: Vec<Range<usize>>,
+    current_span: Range<usize>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ParseError {
-    pub message: String,
+    pub kind: ParseErrorKind,
     pub span: Range<usize>,
     pub filename: String,
-    pub note: Option<String>,
-    pub secondary_span: Option<(String, Range<usize>)>,
-    pub label: Option<String>,
-    pub hint: Option<(String, Range<usize>)>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ParseErrorKind {
+    UnexpectedToken {
+        found: Token,
+        expected: Option<String>,
+    },
+    UnexpectedEOF {
+        expected: Option<String>,
+    },
+    UnclosedBlock {
+        open_span: Range<usize>,
+    },
+    ExpectedFunctionName {},
+    InvalidType {
+        found: Token,
+    },
+    ExpectedIdentAfterLet,
 }
 
 pub type ParseResult<T> = Result<T, ParseError>;
@@ -162,6 +181,7 @@ impl Parser {
             pos: 0,
             filename,
             block_stack: Vec::new(),
+            current_span: 0..0,
         }
     }
 
@@ -170,34 +190,32 @@ impl Parser {
     }
 
     pub fn next(&mut self) -> Option<SpannedToken> {
-        let tok = self.tokens.get(self.pos).cloned();
-        if tok.is_some() {
+        let token = self.tokens.get(self.pos).cloned();
+        let tok = token.clone();
+        if let Some(tok) = tok {
             self.pos += 1;
+            self.current_span = tok.clone().span;
         }
-        tok
+        token
     }
 
-    pub fn expect(&mut self, kind: Token) -> ParseResult<SpannedToken> {
-        let filename = self.filename.clone();
+    fn expect(&mut self, expected: Token) -> ParseResult<SpannedToken> {
         match self.next() {
-            Some(tok) if tok.token == kind => Ok(tok),
+            Some(tok) if tok.token == expected => Ok(tok),
             Some(tok) => Err(ParseError {
-                message: format!("Expected {:?}, found {:?}", kind, tok.token),
+                kind: ParseErrorKind::UnexpectedToken {
+                    found: tok.token.clone(),
+                    expected: Some(expected.to_string()),
+                },
                 span: tok.span.clone(),
-                filename: filename.clone(),
-                note: None,
-                secondary_span: None,
-                label: None,
-                hint: None,
+                filename: self.filename.clone(),
             }),
             None => Err(ParseError {
-                message: format!("Expected {:?}, found EOF", kind),
-                span: 0..0,
-                filename: filename.clone(),
-                note: None,
-                secondary_span: None,
-                label: None,
-                hint: None,
+                kind: ParseErrorKind::UnexpectedEOF {
+                    expected: Some(expected.to_string()),
+                },
+                span: self.current_span.clone(),
+                filename: self.filename.clone(),
             }),
         }
     }
@@ -219,24 +237,21 @@ impl Parser {
                     self.next();
                     Ok(Item::Function(self.parse_function()?))
                 }
-                _ => Err(ParseError {
-                    message: format!("Unexpected token in program: {:?}", tok.token),
+                other => Err(ParseError {
+                    kind: ParseErrorKind::UnexpectedToken {
+                        found: other.clone(),
+                        expected: Some("function, struct or impl".into()),
+                    },
                     span: tok.span.clone(),
-                    secondary_span: None,
-                    note: None,
                     filename: self.filename.clone(),
-                    label: None,
-                    hint: None,
                 }),
             },
             None => Err(ParseError {
-                message: "Unexpected end of file".to_string(),
-                span: 0..0,
+                kind: ParseErrorKind::UnexpectedEOF {
+                    expected: Some("function, struct, or impl".to_string()),
+                },
+                span: self.current_span.clone(),
                 filename: self.filename.clone(),
-                note: None,
-                secondary_span: None,
-                label: None,
-                hint: None,
             }),
         }
     }
@@ -244,26 +259,18 @@ impl Parser {
     pub fn parse_function(&mut self) -> ParseResult<Function> {
         let filename = self.filename.clone();
         let name_tok = self.next().ok_or(ParseError {
-            message: format!("Expected function name"),
-            span: 0..0,
-            filename: filename.clone(),
-            note: None,
-            secondary_span: None,
-            label: None,
-            hint: None,
+            kind: ParseErrorKind::ExpectedFunctionName {},
+            span: self.current_span.clone(),
+            filename,
         })?;
 
         let name = match &name_tok.token {
             Token::Ident(s) => s.clone(),
             _ => {
                 return Err(ParseError {
-                    message: format!("Expected function name"),
-                    span: name_tok.span.clone(),
-                    filename: filename.clone(),
-                    note: None,
-                    secondary_span: None,
-                    label: None,
-                    hint: None,
+                    kind: ParseErrorKind::ExpectedFunctionName {},
+                    span: self.block_stack.last().cloned().unwrap(),
+                    filename: self.filename.clone(),
                 });
             }
         };
@@ -276,8 +283,6 @@ impl Parser {
         let return_type = self.parse_type()?;
 
         let body = self.parse_block()?;
-
-        self.expect(Token::RBrace)?;
 
         Ok(Function {
             name,
@@ -322,13 +327,11 @@ impl Parser {
     fn parse_type(&mut self) -> ParseResult<Type> {
         let filename = self.filename.clone();
         let tok = self.next().ok_or(ParseError {
-            message: "Expected type".to_string(),
-            span: 0..0,
-            filename: filename.clone(),
-            secondary_span: None,
-            note: None,
-            label: None,
-            hint: None,
+            kind: ParseErrorKind::UnexpectedEOF {
+                expected: Some("type".into()),
+            },
+            span: self.current_span.clone(),
+            filename,
         })?;
 
         match &tok.token {
@@ -343,13 +346,11 @@ impl Parser {
                 custom => Ok(Type::Custom(custom.into(), tok.span.clone())),
             },
             _ => Err(ParseError {
-                message: format!("Expected type annotation, got {:?}", tok.token.to_string()),
+                kind: ParseErrorKind::InvalidType {
+                    found: tok.token.clone(),
+                },
                 span: tok.span.clone(),
-                filename: filename.clone(),
-                secondary_span: None,
-                note: None,
-                label: None,
-                hint: None,
+                filename: self.filename.clone(),
             }),
         }
     }
@@ -368,7 +369,16 @@ impl Parser {
         }
 
         if self.is_eof() {
-            // ERROR: unclosed block
+            let open_span = self.block_stack.pop().unwrap();
+
+            return Err(ParseError {
+                kind: ParseErrorKind::UnclosedBlock { open_span },
+                span: lbrace.span.clone(),
+                filename: self.filename.clone(),
+            });
+        }
+
+        self.expect(Token::RBrace).map_err(|e| {
             let open_span = self.block_stack.pop().unwrap();
 
             let current_span = self
@@ -377,27 +387,17 @@ impl Parser {
                 .map(|t| t.span.clone())
                 .unwrap_or(open_span.clone());
 
-            return Err(ParseError {
-                message: "this file contains an unclosed block".to_string(),
-                span: lbrace.span.clone(), // where we noticed
-                secondary_span: Some((
-                    "Blocks needs to be closed with the corresponding closing bracket".to_owned(),
-                    current_span.clone(),
-                )), // where it opened
+            ParseError {
+                kind: ParseErrorKind::UnclosedBlock {
+                    open_span: current_span,
+                },
+                span: lbrace.span.clone(),
                 filename: self.filename.clone(),
-                note: Some(format!(
-                    "Consider closing the current block with the respective bracket"
-                )),
-                label: Some(format!("block starts here")),
-                hint: Some((
-                    format!("hint: consider adding }} here"),
-                    current_span.clone().start + 1..current_span.clone().end + 1,
-                )),
-            });
-        }
+            }
+        })?;
 
-        self.expect(Token::RBrace)?;
         self.block_stack.pop();
+
         Ok(Block { stmts })
     }
 
@@ -409,13 +409,11 @@ impl Parser {
                 _ => self.parse_expr_stmt(),
             },
             None => Err(ParseError {
-                message: "Unexpected EOF in block".into(),
-                span: 0..0,
+                kind: ParseErrorKind::UnexpectedEOF {
+                    expected: Some("statement".to_string()),
+                },
+                span: self.current_span.clone(),
                 filename: self.filename.clone(),
-                secondary_span: None,
-                note: None,
-                label: None,
-                hint: None,
             }),
         }
     }
@@ -423,26 +421,18 @@ impl Parser {
     fn parse_let_stmt(&mut self) -> ParseResult<Stmt> {
         let let_tok = self.next().unwrap();
         let name_tok = self.next().ok_or(ParseError {
-            message: "Expected identifier after let".into(),
             span: let_tok.span.clone(),
             filename: self.filename.clone(),
-            note: None,
-            secondary_span: None,
-            label: None,
-            hint: None,
+            kind: ParseErrorKind::ExpectedIdentAfterLet,
         })?;
 
         let name = match &name_tok.token {
             Token::Ident(s) => s.clone(),
             _ => {
                 return Err(ParseError {
-                    message: "Expected identifier after let".into(),
+                    kind: ParseErrorKind::ExpectedIdentAfterLet,
                     span: name_tok.span.clone(),
                     filename: self.filename.clone(),
-                    note: None,
-                    secondary_span: None,
-                    label: None,
-                    hint: None,
                 });
             }
         };
@@ -659,15 +649,14 @@ impl Parser {
         }
         Ok(expr)
     }
+
     fn parse_primary(&mut self) -> ParseResult<Expr> {
         let tok = self.next().ok_or(ParseError {
-            message: "expected expression".to_string(),
-            span: 0..0,
+            kind: ParseErrorKind::UnexpectedEOF {
+                expected: Some("expression".into()),
+            },
+            span: self.current_span.clone(),
             filename: self.filename.clone(),
-            note: None,
-            secondary_span: None,
-            label: None,
-            hint: None,
         })?;
         match tok.token {
             Token::Int(i) => Ok(Expr::IntLiteral(i, Type::I64(tok.span.clone()), tok.span)),
@@ -678,14 +667,13 @@ impl Parser {
                 self.expect(Token::RParen)?;
                 Ok(expr)
             }
-            _ => Err(ParseError {
-                message: format!("unexpected token in expression: {:?}", tok.token),
+            other => Err(ParseError {
+                kind: ParseErrorKind::UnexpectedToken {
+                    found: other.clone(),
+                    expected: Some("expression".into()),
+                },
                 span: tok.span.clone(),
                 filename: self.filename.clone(),
-                note: None,
-                secondary_span: None,
-                label: None,
-                hint: None,
             }),
         }
     }
@@ -696,84 +684,22 @@ impl Parser {
 
     fn expect_ident(&mut self) -> ParseResult<String> {
         let tok = self.next().ok_or(ParseError {
-            message: "expected identifier".to_string(),
-            span: 0..0,
+            kind: ParseErrorKind::UnexpectedEOF {
+                expected: Some("identifier".into()),
+            },
+            span: self.current_span.clone(),
             filename: self.filename.clone(),
-            note: None,
-            secondary_span: None,
-            label: None,
-            hint: None,
         })?;
 
         match tok.token {
             Token::Ident(name) => Ok(name),
             _ => Err(ParseError {
-                message: format!("expected identifier, found {:?}", tok.token),
+                kind: ParseErrorKind::UnexpectedEOF {
+                    expected: Some("identifier".into()),
+                },
                 span: tok.span.clone(),
                 filename: self.filename.clone(),
-                note: None,
-                secondary_span: None,
-                label: None,
-                hint: None,
             }),
         }
-    }
-}
-
-use ariadne::{Color, Label, Report, ReportKind, Source};
-
-pub fn report_parse_error(source: &str, error: &ParseError) {
-    let mut report = Report::build(ReportKind::Error, (&error.filename, error.span.clone()))
-        .with_message(&error.message);
-
-    if let Some(label) = error.label.clone() {
-        report = report.with_label(
-            Label::new((&error.filename, error.span.clone()))
-                .with_message(label)
-                .with_color(Color::Red),
-        );
-    } else {
-        report = report.with_label(
-            Label::new((&error.filename, error.span.clone()))
-                .with_message("error occurs here")
-                .with_color(Color::Red),
-        );
-    }
-
-    if let Some(note) = error.note.clone() {
-        report = report.with_note(note);
-    };
-
-    if let Some(sec_span) = error.secondary_span.clone() {
-        let span = sec_span.1;
-        let message = sec_span.0;
-        report = report.with_label(
-            Label::new((&error.filename, span.clone()))
-                .with_message(message)
-                .with_color(Color::Blue),
-        );
-    }
-
-    if let Some((help_msg, help_span)) = &error.hint {
-        report = report.with_label(
-            Label::new((&error.filename, help_span.start + 1..help_span.end + 1))
-                .with_message(help_msg)
-                .with_color(Color::Cyan),
-        );
-    }
-
-    report
-        .finish()
-        .print((&error.filename, Source::from(source)))
-        .unwrap();
-}
-
-fn insertion_span_for_next_line(source: &str) -> Range<usize> {
-    // find the last newline in source
-    if let Some(pos) = source.rfind('\n') {
-        let start = pos + 1;
-        start..start // zero-width span at start of next line
-    } else {
-        0..0
     }
 }
