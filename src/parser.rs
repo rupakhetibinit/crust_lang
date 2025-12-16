@@ -1,9 +1,6 @@
-use std::{env::current_exe, io::ErrorKind, ops::Range};
+use std::ops::Range;
 
-use crate::{
-    error,
-    lexer::{SpannedToken, Token},
-};
+use crate::lexer::{SpannedToken, Token};
 
 #[derive(Debug, Clone)]
 pub struct Program {
@@ -373,7 +370,7 @@ impl Parser {
 
             return Err(ParseError {
                 kind: ParseErrorKind::UnclosedBlock { open_span },
-                span: lbrace.span.clone(),
+                span: self.current_span.clone(),
                 filename: self.filename.clone(),
             });
         }
@@ -381,17 +378,11 @@ impl Parser {
         self.expect(Token::RBrace).map_err(|e| {
             let open_span = self.block_stack.pop().unwrap();
 
-            let current_span = self
-                .tokens
-                .last()
-                .map(|t| t.span.clone())
-                .unwrap_or(open_span.clone());
-
             ParseError {
                 kind: ParseErrorKind::UnclosedBlock {
-                    open_span: current_span,
+                    open_span: open_span.clone(),
                 },
-                span: lbrace.span.clone(),
+                span: self.current_span.clone(),
                 filename: self.filename.clone(),
             }
         })?;

@@ -29,7 +29,7 @@ pub fn report_parse_error(source: &str, error: &ParseError) {
 
             // Add suggestion if it's a common mistake
             if let Some(suggestion) = suggest_token_fix(&found_str, expected.as_ref()) {
-                report = report.with_note(format!("help: {}", suggestion));
+                report = report.with_note(format!("{}", suggestion));
             }
         }
 
@@ -45,8 +45,7 @@ pub fn report_parse_error(source: &str, error: &ParseError) {
                     .with_color(Color::Red),
             );
 
-            report =
-                report.with_note("help: check if you're missing a closing delimiter or statement");
+            report = report.with_note("check if you're missing a closing delimiter or statement");
         }
 
         ParseErrorKind::UnclosedBlock { open_span } => {
@@ -62,7 +61,7 @@ pub fn report_parse_error(source: &str, error: &ParseError) {
                     .with_color(Color::Blue),
             );
 
-            report = report.with_note("help: add a closing `}` to match the opening brace");
+            report = report.with_note("add a closing `}` to match the opening brace");
         }
 
         ParseErrorKind::ExpectedFunctionName {} => {
@@ -73,7 +72,7 @@ pub fn report_parse_error(source: &str, error: &ParseError) {
             );
 
             report = report.with_note(
-                "help: function declarations must have a name, like `fn my_function() { ... }`",
+                "function declarations must have a name, like `fn my_function() { ... }`",
             );
         }
 
@@ -90,8 +89,8 @@ pub fn report_parse_error(source: &str, error: &ParseError) {
             if let Some(suggestion) = suggest_similar_type(&found_str) {
                 report = report.with_note(format!("help: did you mean `{}`?", suggestion));
             } else {
-                report = report
-                    .with_note("help: valid types include `int`, `string`, `bool`, `float`, etc.");
+                report =
+                    report.with_note("valid types include `int`, `string`, `bool`, `float`, etc.");
             }
         }
 
@@ -102,9 +101,8 @@ pub fn report_parse_error(source: &str, error: &ParseError) {
                     .with_color(Color::Red),
             );
 
-            report = report.with_note(
-                "help: variable declarations must have a name, like `let my_var = value;`",
-            );
+            report = report
+                .with_note("variable declarations must have a name, like `let my_var = value;`");
         }
     }
 
@@ -140,11 +138,11 @@ fn suggest_token_fix(found_str: &str, expected: Option<&String>) -> Option<Strin
         return Some("use `==` for comparison, `=` is for assignment".to_string());
     }
 
-    if found_str.contains("LeftBrace") && expected_str.contains("(") {
+    if found_str.contains("LBrace") && expected_str.contains("(") {
         return Some("use `(` for function parameters, `{` for blocks".to_string());
     }
 
-    if found_str.contains("LeftParen") && expected_str.contains("{") {
+    if found_str.contains("LParen") && expected_str.contains("{") {
         return Some("use `{` to start a block".to_string());
     }
 
