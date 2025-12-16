@@ -1,3 +1,5 @@
+use env_logger::Builder;
+use log::LevelFilter;
 use logos::Logos;
 
 use crate::lexer::Token;
@@ -7,16 +9,24 @@ mod llvm;
 mod parser;
 
 fn main() {
+    Builder::new()
+        .filter(None, LevelFilter::Debug)
+        .target(env_logger::Target::Stdout)
+        .init();
+
     let option: RunOption = std::env::args()
         .nth(1)
         .expect("Options to be provided")
         .into();
+
+    let cwd = std::env::current_dir().expect("Failed to get current dir");
+
     match option {
         RunOption::File => {
-            let file_name = std::env::args().nth(1).expect("File name to be provided");
+            let file_name = std::env::args().nth(2).expect("File name to be provided");
+            let file_name = cwd.join(file_name);
             let file_contents = std::fs::read_to_string(file_name).expect("File doesn't exist");
-
-            run_file(&file_contents)
+            run_file(&file_contents.trim_ascii())
         }
         RunOption::Repl => run_repl(),
     }

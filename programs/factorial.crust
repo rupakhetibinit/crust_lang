@@ -1,0 +1,11 @@
+fn main() -> u64 {
+    let factorial = |n : u64| {
+        if (n == 0 || n == 1) {
+            1
+        } else {
+            n * factorial(n - 1)
+        }
+    };
+
+    return factorial(10);
+}
