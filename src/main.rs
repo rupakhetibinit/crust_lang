@@ -2,7 +2,7 @@ use env_logger::Builder;
 use log::LevelFilter;
 use logos::Logos;
 
-use crate::lexer::Token;
+use crate::{lexer::Token, parser::Parser};
 
 mod lexer;
 mod llvm;
@@ -26,7 +26,7 @@ fn main() {
             let file_name = std::env::args().nth(2).expect("File name to be provided");
             let file_name = cwd.join(file_name);
             let file_contents = std::fs::read_to_string(file_name).expect("File doesn't exist");
-            run_file(&file_contents.trim_ascii())
+            run_file(file_contents.trim_ascii())
         }
         RunOption::Repl => run_repl(),
     }
@@ -48,10 +48,10 @@ impl From<String> for RunOption {
 }
 
 fn run_file(file_contents: &str) {
-    let lexer = Token::lexer(file_contents);
-    for token in lexer {
-        println!("{:?}", token);
-    }
+    let lexer = Token::lexer(file_contents).map(|res| res.expect("Lexing error"));
+    let mut parser = Parser::new(lexer);
+    let program = parser.parse_program();
+    println!("Parsed program: {:?}", program);
 }
 
 fn run_repl() {
@@ -63,5 +63,5 @@ fn run_repl() {
 
     let input = buf.trim_ascii();
 
-    run_file(&input);
+    run_file(input);
 }

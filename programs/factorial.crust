@@ -1,9 +1,9 @@
 fn main() -> u64 {
-    let factorial = |n : u64| {
-        if (n == 0 || n == 1) {
+    let factorial : fn(u64) -> u64 = |fact : u64| {
+        if (fact == 0 || fact == 1) {
             1
         } else {
-            n * factorial(n - 1)
+            fact * factorial(fact - 1)
         }
     };
 

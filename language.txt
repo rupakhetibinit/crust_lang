@@ -1,0 +1,13 @@
+program -> stmt*
+stmt -> let | return | expr | function_call
+function_call -> varname '(' args ')'
+args -> varname | ',' varname args
+let -> 'let' varname ':' type '=' expr
+type -> 'i64' | 'f64' | 'bool' | 'string' | 'u64' | closure_type | unit
+closure_type -> fn '(' params ')' -> type
+params -> ident ':' type
+varname -> string
+expr -> num | string | ident | '(' expr ')' | if | 'true' | 'false' | closure_expr | binary
+binary -> expr op expr
+op -> '+' | '-' | '*' | '/' | '%' | '==' | '!=' | '<' | '>' | '<=' | '>='
+closure_expr -> | params | { stmt* }

@@ -62,9 +62,19 @@ pub enum Token {
     #[token(";")]
     Semicolon,
     #[token(",")]
-    Comman,
+    Comma,
     #[token("->")]
     TypeArrow,
+    #[token("||")]
+    Or,
+    #[token("&&")]
+    And,
     #[regex("[0-9]+", |lex| lex.slice().parse::<isize>().unwrap(), priority = 3)]
     Integer(isize),
+    #[token("if")]
+    If,
+    #[token("else")]
+    Else,
+    #[token("else if")]
+    ElseIf,
 }
