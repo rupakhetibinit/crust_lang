@@ -1,306 +1,431 @@
+use std::iter::Peekable;
+
+use logos::Logos;
+
 use crate::lexer::Token;
 
-type ParserError = String;
+#[derive(Debug)]
+pub struct Parser<'p> {
+    tokens: Peekable<logos::Lexer<'p, Token>>,
+}
+
+impl<'p> Parser<'p> {
+    pub fn new(input: &'p str) -> Self {
+        let lexer = Token::lexer(input);
+        let tokens = lexer.peekable();
+        Self { tokens }
+    }
+
+    pub fn peek(&mut self) -> Option<Result<Token, ()>> {
+        self.tokens.peek().cloned()
+    }
+
+    pub fn next(&mut self) -> Option<Result<Token, ()>> {
+        println!("Next token {:?}", self.tokens.peek());
+        self.tokens.next()
+    }
+
+    pub fn parse_program(&mut self) -> Program {
+        let mut body = Vec::new();
+        while self.peek().is_some() {
+            body.push(self.parse_top_level().unwrap());
+        }
+        Program { body }
+    }
+
+    pub fn parse_top_level(&mut self) -> Result<AstNode, String> {
+        match self.peek() {
+            Some(Ok(Token::Let)) => self.parse_let_statement(),
+            Some(Ok(Token::Fn)) => self.parse_function_decl(),
+            _ => Err("Unexpected end of input".to_string()),
+        }
+    }
+
+    pub fn parse_function_decl(&mut self) -> Result<AstNode, String> {
+        self.expect_token(Token::Fn)?;
+        let name = self.expect_identifier()?;
+        self.expect_token(Token::LeftParen)?;
+        let params = self.parse_params()?;
+        self.expect_token(Token::LBrace)?;
+
+        let mut body_statements = Vec::new();
+        while let Some(token) = self.peek() {
+            match token {
+                Ok(Token::RBrace) => break,
+                _ => {
+                    let stmt = self.parse_statement()?;
+                    body_statements.push(stmt);
+
+                    if let Some(Ok(Token::Semicolon)) = self.peek() {
+                        self.next();
+                    }
+                }
+            }
+        }
+
+        self.expect_token(Token::RBrace)?;
+
+        let body = if body_statements.len() == 1 {
+            body_statements.into_iter().next().unwrap()
+        } else {
+            AstNode::Expr(Expression::Block {
+                body: body_statements,
+                return_type: None,
+            })
+        };
+
+        Ok(AstNode::Expr(Expression::FunctionDecl {
+            name,
+            params,
+            body: Box::new(body),
+            return_type: None,
+        }))
+    }
+
+    fn parse_statement(&mut self) -> Result<AstNode, String> {
+        match self.peek() {
+            Some(Ok(Token::Let)) => {
+                self.next();
+                self.parse_let_statement()
+            }
+            Some(Ok(Token::Return)) => {
+                self.next();
+                let value = self.parse_expression(0)?;
+                Ok(AstNode::Expr(Expression::Return {
+                    expr: Box::new(value),
+                }))
+            }
+            _ => self.parse_expression(0),
+        }
+    }
+
+    pub fn parse_let_statement(&mut self) -> Result<AstNode, String> {
+        let name = self.expect_identifier()?;
+
+        let ty: Option<Type>;
+        match self.peek() == Some(Ok(Token::Colon)) {
+            true => {
+                self.expect_token(Token::Colon)?;
+                ty = Some(self.parse_type()?);
+            }
+            false => ty = None,
+        };
+
+        self.expect_token(Token::Equal)?;
+
+        let value = self.parse_expression(0)?;
+
+        self.expect_token(Token::Semicolon)?;
+
+        Ok(AstNode::Expr(Expression::Let {
+            var_name: name,
+            value: Box::new(value),
+            var_type: ty,
+        }))
+    }
+
+    fn parse_type(&mut self) -> Result<Type, String> {
+        match self.next() {
+            Some(Ok(Token::Identifier(x))) => match x.as_str() {
+                "i64" => Ok(Type::I64),
+                "f64" => Ok(Type::F64),
+                "u64" => Ok(Type::U64),
+                _ => Err(format!("Unknown type: {}", x)),
+            },
+            x => Err(format!("Unexpected token {:?}", x)),
+        }
+    }
+
+    fn parse_expression(&mut self, precedence: u8) -> Result<AstNode, String> {
+        let mut left = self.parse_prefix()?;
+
+        loop {
+            let op = match self.peek() {
+                Some(op) => op.unwrap(),
+                None => break,
+            };
+
+            if let AstNode::Expr(Expression::Variable(ref name)) = left {
+                if op == Token::LeftParen {
+                    left = self.parse_function_call(name.clone())?;
+                    continue;
+                }
+            }
+
+            let (l_bp, r_bp) = match self.binding_power(op.clone()) {
+                Some(x) => x,
+                None => break,
+            };
+
+            if l_bp < precedence {
+                break;
+            }
+
+            self.next().unwrap().unwrap();
+
+            let right = self.parse_expression(r_bp)?;
+
+            left = AstNode::Expr(Expression::Binary {
+                left: Box::new(left),
+                right: Box::new(right),
+                operator: op,
+                return_type: None,
+            });
+        }
+
+        Ok(left)
+    }
+
+    fn parse_prefix(&mut self) -> Result<AstNode, String> {
+        let token = self.next().unwrap().unwrap();
+        match token {
+            Token::Identifier(ident) => Ok(AstNode::Expr(Expression::Variable(ident))),
+            Token::Integer(num) => Ok(AstNode::Expr(Expression::Literal(num))),
+            Token::LeftParen => self.parse_grouped_expression(),
+            Token::Pipe => self.parse_closure_function(),
+            Token::Let => self.parse_let_statement(),
+            Token::If => self.parse_if_statement(),
+            Token::LBrace => {
+                let expr = self.parse_expression(0)?;
+                self.expect_token(Token::RBrace)?;
+                Ok(expr)
+            }
+            Token::Return => self.parse_return_statement(),
+            _ => Err(format!("Unexpected token in parse prefix {:?}", token)),
+        }
+    }
+
+    fn parse_if_statement(&mut self) -> Result<AstNode, String> {
+        let condition = self.parse_expression(0)?;
+
+        self.expect_token(Token::LBrace)?;
+        let then_branch = self.parse_expression(0)?;
+        self.expect_token(Token::RBrace)?;
+
+        let else_branch = if let Some(Ok(Token::Else)) = self.peek() {
+            self.next();
+            self.expect_token(Token::LBrace)?;
+            let branch = self.parse_expression(0)?;
+            self.expect_token(Token::RBrace)?;
+            Some(Box::new(branch))
+        } else {
+            None
+        };
+
+        Ok(AstNode::Expr(Expression::If {
+            condition: Box::new(condition),
+            then_branch: Box::new(then_branch),
+            else_branch,
+        }))
+    }
+
+    fn parse_closure_function(&mut self) -> Result<AstNode, String> {
+        let params = self.parse_closure_params()?;
+        self.expect_token(Token::LBrace)?;
+        let body = self.parse_expression(0)?;
+        self.expect_token(Token::RBrace)?;
+        Ok(AstNode::Expr(Expression::ClosureFunction {
+            params: params,
+            body: Box::new(body),
+            return_type: None,
+        }))
+    }
+
+    fn parse_params(&mut self) -> Result<Vec<Params>, String> {
+        let mut params = Vec::new();
+        while let Some(token) = self.next() {
+            match token {
+                Ok(Token::Identifier(ident)) => params.push(Params {
+                    name: ident,
+                    ty: None,
+                }),
+                Ok(Token::RightParen) => break,
+                _ => return Err(format!("Unexpected token in parse params {:?}", token)),
+            }
+        }
+        Ok(params)
+    }
+
+    fn parse_closure_params(&mut self) -> Result<Vec<Params>, String> {
+        let mut params = Vec::new();
+        while let Some(token) = self.next() {
+            match token {
+                Ok(Token::Identifier(ident)) => params.push(Params {
+                    name: ident,
+                    ty: None,
+                }),
+                Ok(Token::Pipe) => break,
+                _ => return Err(format!("Unexpected token closure param {:?}", token)),
+            }
+        }
+        Ok(params)
+    }
+
+    fn parse_grouped_expression(&mut self) -> Result<AstNode, String> {
+        let expr = self.parse_expression(0)?;
+        self.expect_token(Token::RightParen)?;
+        Ok(expr)
+    }
+
+    fn expect_identifier(&mut self) -> Result<String, String> {
+        let token = self.next().unwrap().unwrap();
+        match token {
+            Token::Identifier(ident) => Ok(ident),
+            _ => Err(format!("Expected identifier, found {:?}", token)),
+        }
+    }
+
+    fn expect_token(&mut self, token: Token) -> Result<Token, String> {
+        match self.next() {
+            Some(Ok(t)) if t == token => Ok(t),
+            Some(Ok(t)) => Err(format!("Expected {:?}, found {:?}", token, t)),
+            Some(Err(e)) => Err(format!("Error: {:?}", e)),
+            None => Err("Unexpected end of input".to_string()),
+        }
+    }
+
+    fn binding_power(&self, op: Token) -> Option<(u8, u8)> {
+        match op {
+            Token::Or => Some((1, 2)),
+            Token::And => Some((3, 4)),
+            Token::EqualEqual | Token::NotEqual => Some((5, 6)),
+            Token::LessThan
+            | Token::LessThanOrEqual
+            | Token::GreaterThan
+            | Token::GreaterThanOrEqual => Some((7, 8)),
+            Token::Plus | Token::Minus => Some((9, 10)),
+            Token::Star | Token::Slash => Some((11, 12)),
+            Token::LeftParen => Some((30, 40)),
+            _ => None,
+        }
+    }
+
+    fn parse_function_call(&mut self, name: String) -> Result<AstNode, String> {
+        self.expect_token(Token::LeftParen)?;
+
+        let mut params = Vec::new();
+
+        // Parse parameters until we hit a right paren
+        while let Some(token) = self.peek() {
+            match token {
+                Ok(Token::RightParen) => break,
+                _ => {
+                    let param = self.parse_expression(0)?;
+
+                    if let AstNode::Expr(expr) = param {
+                        params.push(expr);
+                    } else {
+                        return Err("Expected expression in function call".to_string());
+                    }
+
+                    if let Some(Ok(Token::Comma)) = self.peek() {
+                        self.next();
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+
+        self.expect_token(Token::RightParen)?;
+
+        Ok(AstNode::Expr(Expression::FunctionCall {
+            params,
+            function_name: name,
+        }))
+    }
+
+    fn parse_return_statement(&mut self) -> Result<AstNode, String> {
+        self.expect_token(Token::Return)?;
+        let expr = self.parse_expression(0)?;
+        self.expect_token(Token::Semicolon)?;
+        Ok(AstNode::Expr(Expression::Return {
+            expr: Box::new(expr),
+        }))
+    }
+}
+
+#[derive(Debug)]
+pub struct Program {
+    body: Vec<AstNode>,
+}
 
 #[derive(Debug)]
 pub enum AstNode {
-    FnDecl {
-        name: String,
-        params: Vec<Params>,
-        body: Vec<AstNode>,
+    Expr(Expression),
+}
+
+#[derive(Debug)]
+pub enum Expression {
+    Binary {
+        left: Box<AstNode>,
+        operator: Token,
+        right: Box<AstNode>,
         return_type: Option<Type>,
     },
-    MainFunction {
-        body: Vec<AstNode>,
-    },
-    LetBinding {
+    Let {
         var_name: String,
-        var_type: Type,
         value: Box<AstNode>,
-    },
-    IfExpr {
-        condition: Box<AstNode>,
-        then_branch: Vec<AstNode>,
-        else_branch: Option<Vec<AstNode>>,
-    },
-    BinaryExpr {
-        left: Box<AstNode>,
-        op: BinOp,
-        right: Box<AstNode>,
+        var_type: Option<Type>,
     },
     Block {
         body: Vec<AstNode>,
+        return_type: Option<Type>,
     },
-    Closure {
+    If {
+        condition: Box<AstNode>,
+        then_branch: Box<AstNode>,
+        else_branch: Option<Box<AstNode>>,
+    },
+    ClosureFunction {
         params: Vec<Params>,
-        body: Vec<AstNode>,
+        body: Box<AstNode>,
+        return_type: Option<Type>,
     },
-    ReturnStatement {
-        value: Box<AstNode>,
+    FunctionCall {
+        params: Vec<Expression>,
+        function_name: String,
     },
-}
-
-#[derive(Debug)]
-pub enum BinOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Mod,
-    And,
-    Or,
-}
-
-#[derive(Debug)]
-pub enum Type {
-    Int32,
-    Int64,
-    Float32,
-    Float64,
-    Closure {
-        params: Vec<Type>,
-        return_type: Box<Type>,
+    FunctionDecl {
+        name: String,
+        params: Vec<Params>,
+        body: Box<AstNode>,
+        return_type: Option<Type>,
     },
-    UInt64,
-    Unit,
+    Literal(i64),
+    Variable(String),
+    Return {
+        expr: Box<AstNode>,
+    },
 }
 
 #[derive(Debug)]
 pub struct Params {
     name: String,
-    ty: Type,
+    ty: Option<Type>,
 }
 
-pub struct Parser<I: Iterator<Item = Token>> {
-    tokens: I,
-    peeked: Option<Token>,
+#[derive(Debug)]
+pub enum Type {
+    I64,
+    U64,
+    F64,
+    Unit,
 }
 
-impl<I: Iterator<Item = Token>> Parser<I> {
-    pub fn new(tokens: I) -> Self {
-        Parser {
-            tokens,
-            peeked: None,
-        }
-    }
+pub enum Operator {
+    Math(BinOp),
+    Logical(LogicalOp),
+}
 
-    pub fn peek(&mut self) -> Option<&Token> {
-        if self.peeked.is_none() {
-            self.peeked = self.tokens.next()
-        }
-        self.peeked.as_ref()
-    }
+pub enum BinOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+}
 
-    pub fn next(&mut self) -> Option<Token> {
-        self.peeked.take().or_else(|| self.tokens.next())
-    }
-
-    fn expect(&mut self, expected: Token) -> Result<Token, ParserError> {
-        match self.next() {
-            Some(t) if t == expected => Ok(t),
-            Some(t) => Err(format!("Expected {:?}, got {:?}", expected, t)),
-            None => Err(format!("Expected {:?}, found EOF", expected)),
-        }
-    }
-
-    fn expect_ident(&mut self) -> Result<String, ParserError> {
-        match self.next() {
-            Some(Token::Identifier(name)) => Ok(name),
-            Some(tok) => Err(format!("Expected identifier, got {:?}", tok)),
-            None => Err("Expected identifier, got EOF".into()),
-        }
-    }
-
-    pub fn parse_program(&mut self) -> Result<Vec<AstNode>, ParserError> {
-        let nodes: Result<Vec<_>, _> = std::iter::from_fn(|| {
-            if self.peek().is_some() {
-                Some(self.parse_stmt())
-            } else {
-                None
-            }
-        })
-        .collect();
-        nodes
-    }
-
-    pub fn parse_stmt(&mut self) -> Result<AstNode, ParserError> {
-        match self.next().expect("Token to be there") {
-            Token::Let => self.parse_let_stmt(),
-            Token::Return => self.parse_return_stmt(),
-            Token::Fn => self.parse_fn_decl(),
-            _ => self.parse_expression_stmt(),
-        }
-    }
-
-    pub fn parse_fn_decl(&mut self) -> Result<AstNode, ParserError> {
-        let name = self.expect_ident()?;
-        let params = self.parse_fn_params()?;
-        let return_type = self.parse_return_type()?;
-        self.expect(Token::LBrace)?;
-        let body = self.parse_block_stmt()?;
-        self.expect(Token::RBrace)?;
-        Ok(AstNode::FnDecl {
-            name,
-            params,
-            body,
-            return_type,
-        })
-    }
-
-    pub fn parse_return_type(&mut self) -> Result<Option<Type>, ParserError> {
-        self.expect(Token::TypeArrow)?;
-        let ty = self.parse_type()?;
-        Ok(Some(ty))
-    }
-
-    pub fn parse_type(&mut self) -> Result<Type, ParserError> {
-        let ty = self.expect_type()?;
-        Ok(ty)
-    }
-
-    pub fn parse_fn_params(&mut self) -> Result<Vec<Params>, ParserError> {
-        self.expect(Token::LeftParen)?;
-        let mut params = Vec::new();
-        if self.peek().expect("Token to be here") != &Token::RightParen {
-            let ident = self.expect_ident()?;
-            let ty = self.parse_params_type()?;
-            params.push(Params {
-                name: ident,
-                ty: ty,
-            });
-            while self.peek().expect("Token to be here") == &Token::Comma {
-                let ident = self.expect_ident()?;
-                let ty = self.parse_params_type()?;
-                params.push(Params {
-                    name: ident,
-                    ty: ty,
-                });
-            }
-        }
-        self.expect(Token::RightParen)?;
-        Ok(params)
-    }
-
-    pub fn parse_params_type(&mut self) -> Result<Type, ParserError> {
-        self.expect(Token::Colon)?;
-        let ty = self.expect_type()?;
-        Ok(ty)
-    }
-
-    pub fn parse_return_stmt(&mut self) -> Result<AstNode, ParserError> {
-        self.expect(Token::Return)?;
-        let expr = Box::new(self.parse_expression_stmt()?);
-        Ok(AstNode::ReturnStatement { value: expr })
-    }
-
-    pub fn parse_let_stmt(&mut self) -> Result<AstNode, ParserError> {
-        let var_name = self.expect_ident()?;
-        self.expect(Token::Colon)?;
-        let var_type = self.expect_type()?;
-        self.expect(Token::Equal)?;
-        let expr = Box::new(self.parse_expression_stmt()?);
-        Ok(AstNode::LetBinding {
-            var_name,
-            var_type,
-            value: expr,
-        })
-    }
-
-    pub fn parse_expression_stmt(&mut self) -> Result<AstNode, ParserError> {
-        match self.next().expect("Tokent to be here") {
-            Token::Pipe => self.parse_closure_function(),
-            Token::Let => self.parse_let_stmt(),
-            Token::If => self.parse_if_stmt(),
-            x => Err(format!("Expected expression found {:?}", x)),
-        }
-    }
-
-    pub fn parse_if_stmt(&mut self) -> Result<AstNode, ParserError> {
-        self.expect(Token::LeftParen)?;
-        let condition = Box::new(self.parse_expression_stmt()?);
-        self.expect(Token::RightParen)?;
-
-        let then_branch = self.parse_block_stmt()?;
-
-        let else_branch = if self.peek().expect("Token to be here") == &Token::Else {
-            self.next().expect("Token to be here");
-            Some(self.parse_block_stmt()?)
-        } else {
-            None
-        };
-
-        Ok(AstNode::IfExpr {
-            condition,
-            then_branch,
-            else_branch,
-        })
-    }
-
-    pub fn parse_closure_function(&mut self) -> Result<AstNode, ParserError> {
-        let params = self.parse_closure_fn_params()?;
-        self.expect(Token::LBrace)?;
-        let body = self.parse_block_stmt()?;
-        self.expect(Token::RBrace)?;
-
-        Ok(AstNode::Closure { params, body })
-    }
-
-    pub fn parse_block_stmt(&mut self) -> Result<Vec<AstNode>, ParserError> {
-        let mut stmts = Vec::new();
-        while self.peek().expect("Token to be here") != &Token::RBrace {
-            stmts.push(self.parse_expression_stmt()?);
-        }
-        Ok(stmts)
-    }
-
-    pub fn expect_type(&mut self) -> Result<Type, ParserError> {
-        let ty = self.next().expect("Type to be in there");
-        match ty {
-            Token::Fn => self.parse_closure_type(),
-            Token::I64 => Ok(Type::Int64),
-            Token::U64 => Ok(Type::UInt64),
-            _ => Err("That's not a type".to_string()),
-        }
-    }
-
-    pub fn parse_closure_type(&mut self) -> Result<Type, ParserError> {
-        self.expect(Token::LeftParen)?;
-        let params = self.parse_closure_param_list()?;
-        self.expect(Token::TypeArrow)?;
-        let return_type = self.expect_type()?;
-        Ok(Type::Closure {
-            params,
-            return_type: Box::new(return_type),
-        })
-    }
-
-    pub fn parse_closure_fn_params(&mut self) -> Result<Vec<Params>, ParserError> {
-        let mut params = Vec::new();
-        loop {
-            let ident = self.expect_ident()?;
-            self.expect(Token::Colon)?;
-            let ty = self.expect_type()?;
-            params.push(Params { name: ident, ty });
-            match self.next().expect("Token to be there") {
-                Token::Comma => continue,
-                Token::Pipe => break,
-                x => return Err(format!("Expected type, got {:?}", x)),
-            }
-        }
-        Ok(params)
-    }
-
-    pub fn parse_closure_param_list(&mut self) -> Result<Vec<Type>, ParserError> {
-        let mut params = Vec::new();
-        loop {
-            match self.next().expect("Token to be there") {
-                Token::RightParen => break,
-                Token::Comma => continue,
-                Token::I64 => params.push(Type::Int64),
-                Token::U64 => params.push(Type::UInt64),
-                x => return Err(format!("Expected type, got {:?}", x)),
-            }
-        }
-        Ok(params)
-    }
+pub enum LogicalOp {
+    And,
+    Or,
 }

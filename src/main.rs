@@ -1,19 +1,10 @@
-use env_logger::Builder;
-use log::LevelFilter;
-use logos::Logos;
-
-use crate::{lexer::Token, parser::Parser};
+use crate::parser::Parser;
 
 mod lexer;
 mod llvm;
 mod parser;
 
 fn main() {
-    Builder::new()
-        .filter(None, LevelFilter::Debug)
-        .target(env_logger::Target::Stdout)
-        .init();
-
     let option: RunOption = std::env::args()
         .nth(1)
         .expect("Options to be provided")
@@ -48,8 +39,7 @@ impl From<String> for RunOption {
 }
 
 fn run_file(file_contents: &str) {
-    let lexer = Token::lexer(file_contents).map(|res| res.expect("Lexing error"));
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::new(file_contents);
     let program = parser.parse_program();
     println!("Parsed program: {:?}", program);
 }

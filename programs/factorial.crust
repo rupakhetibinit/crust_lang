@@ -1,5 +1,5 @@
-fn main() -> u64 {
-    let factorial : fn(u64) -> u64 = |fact : u64| {
+fn main() {
+    let factorial = |fact| {
         if (fact == 0 || fact == 1) {
             1
         } else {
