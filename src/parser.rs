@@ -347,7 +347,7 @@ impl<'p> Parser<'p> {
 
 #[derive(Debug)]
 pub struct Program {
-    body: Vec<AstNode>,
+    pub body: Vec<AstNode>,
 }
 
 #[derive(Debug)]
@@ -401,8 +401,8 @@ pub enum Expression {
 
 #[derive(Debug)]
 pub struct Params {
-    name: String,
-    ty: Option<Type>,
+    pub name: String,
+    pub ty: Option<Type>,
 }
 
 #[derive(Debug)]

@@ -1,4 +1,6 @@
-use crate::parser::Parser;
+use std::io::Write;
+
+use crate::{llvm::CodeGen, parser::Parser};
 
 mod lexer;
 mod llvm;
@@ -42,6 +44,7 @@ fn run_file(file_contents: &str) {
     let mut parser = Parser::new(file_contents);
     let program = parser.parse_program();
     println!("Parsed program: {:?}", program);
+    llvm::compile_and_run(program).expect("Failed to compile and run");
 }
 
 fn run_repl() {
