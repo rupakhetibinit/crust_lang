@@ -1,0 +1,11 @@
+[package]
+name = "compiler"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+inkwell = { git = "https://github.com/TheDan64/inkwell.git", default-features = false, features = [
+  "llvm21-1",
+  "target-x86"
+] }
+logos = "0.16.0"

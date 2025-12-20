@@ -102,13 +102,12 @@ impl<'p> Parser<'p> {
     pub fn parse_let_statement(&mut self) -> Result<AstNode, String> {
         let name = self.expect_identifier()?;
 
-        let ty: Option<Type>;
-        match self.peek() == Some(Ok(Token::Colon)) {
+        let ty: Option<Type> = match self.peek() == Some(Ok(Token::Colon)) {
             true => {
                 self.expect_token(Token::Colon)?;
-                ty = Some(self.parse_type()?);
+                Some(self.parse_type()?)
             }
-            false => ty = None,
+            false => None,
         };
 
         self.expect_token(Token::Equal)?;
@@ -139,17 +138,14 @@ impl<'p> Parser<'p> {
     fn parse_expression(&mut self, precedence: u8) -> Result<AstNode, String> {
         let mut left = self.parse_prefix()?;
 
-        loop {
-            let op = match self.peek() {
-                Some(op) => op.unwrap(),
-                None => break,
-            };
+        while let Some(op) = self.peek() {
+            let op = op.unwrap();
 
-            if let AstNode::Expr(Expression::Variable(ref name)) = left {
-                if op == Token::LeftParen {
-                    left = self.parse_function_call(name.clone())?;
-                    continue;
-                }
+            if let AstNode::Expr(Expression::Variable(ref name)) = left
+                && op == Token::LeftParen
+            {
+                left = self.parse_function_call(name.clone())?;
+                continue;
             }
 
             let (l_bp, r_bp) = match self.binding_power(op.clone()) {
@@ -345,17 +341,17 @@ impl<'p> Parser<'p> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Program {
     pub body: Vec<AstNode>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AstNode {
     Expr(Expression),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expression {
     Binary {
         left: Box<AstNode>,
@@ -399,13 +395,13 @@ pub enum Expression {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Params {
     pub name: String,
     pub ty: Option<Type>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Type {
     I64,
     U64,

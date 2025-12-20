@@ -1,6 +1,6 @@
-use std::io::Write;
+use inkwell::context::Context;
 
-use crate::{llvm::CodeGen, parser::Parser};
+use crate::parser::Parser;
 
 mod lexer;
 mod llvm;
@@ -44,7 +44,10 @@ fn run_file(file_contents: &str) {
     let mut parser = Parser::new(file_contents);
     let program = parser.parse_program();
     println!("Parsed program: {:?}", program);
-    llvm::compile_and_run(program).expect("Failed to compile and run");
+    let context = Context::create();
+    let mut compiler = llvm::CodeGen::new(&context, "my_program");
+    compiler.compile_program(program);
+    compiler.save_ir();
 }
 
 fn run_repl() {
