@@ -1,0 +1,7 @@
+[package]
+name = "crust-backend"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+crust-frontend = { path = "../frontend" }

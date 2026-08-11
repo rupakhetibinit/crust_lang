@@ -1,0 +1,8 @@
+[package]
+name = "crust-frontend"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+logos = { version = "0.16.1" }
