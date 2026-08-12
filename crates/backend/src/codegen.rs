@@ -40,6 +40,10 @@ impl CodeGen {
                     (BinOp::Add, Type::I32) => chunk.emit(OpCode::AddI64),
                     (BinOp::Add, Type::F64) => chunk.emit(OpCode::AddF64),
                     (BinOp::Multiply, Type::I64) => chunk.emit(OpCode::MulI64),
+                    (BinOp::Divide, Type::I64) => chunk.emit(OpCode::DivI64),
+                    (BinOp::Divide, Type::F64) | (BinOp::Divide, Type::F32) => {
+                        chunk.emit(OpCode::DivF64)
+                    }
                     _ => todo!("unsupported binary op: {:?} {:?}", op, result_type),
                 }
             }
@@ -135,6 +139,8 @@ pub enum OpCode {
     AddF64,
     MulI64,
     NegI64,
+    DivF64,
+    DivI64,
     Call(String),
     Return,
     Halt,

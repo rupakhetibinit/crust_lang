@@ -1,6 +1,5 @@
-use crust_frontend::ast::LiteralValue;
-
 use crate::{chunk::Chunk, codegen::OpCode};
+use crust_frontend::ast::LiteralValue;
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -96,6 +95,16 @@ impl VirtualMachine {
                 let val = self.stack.pop().expect("Stack underflow");
                 println!("{}", val);
             }
+            OpCode::DivF64 => {
+                let left = self.pop_float();
+                let right = self.pop_float();
+                self.stack.push(Value::Float(left as f64 / right as f64));
+            }
+            OpCode::DivI64 => {
+                let right = self.pop_int();
+                let left = self.pop_int();
+                self.stack.push(Value::Int(left / right));
+            }
             _ => panic!("Unsupported opcode: {:?}", op),
         }
     }
@@ -104,6 +113,27 @@ impl VirtualMachine {
         match self.stack.pop().expect("stack underflow") {
             Value::Int(i) => i,
             other => panic!("expected int on stack, got {:?}", other),
+        }
+    }
+
+    fn pop_float(&mut self) -> f64 {
+        match self.stack.pop().expect("stack underflow") {
+            Value::Float(i) => i,
+            other => panic!("expected float on stack, got {:?}", other),
+        }
+    }
+
+    fn pop_string(&mut self) -> String {
+        match self.stack.pop().expect("stack underflow") {
+            Value::String(i) => i,
+            other => panic!("expected float on stack, got {:?}", other),
+        }
+    }
+
+    fn pop_bool(&mut self) -> bool {
+        match self.stack.pop().expect("stack underflow") {
+            Value::Bool(i) => i,
+            other => panic!("expected float on stack, got {:?}", other),
         }
     }
 }
