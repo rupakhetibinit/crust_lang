@@ -1,13 +1,13 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use crust_backend::vm::CrustVM;
 pub fn criterion_benchmark(c: &mut Criterion) {
-    c.bench_function("Crust Interpreter", |b| {
+    c.bench_function("Crust Bytecode VM", |b| {
         b.iter(|| {
-            let mut crust = CrustVM::new();
+            let crust = CrustVM::new();
 
-            let input = "1 + 2 + 3 * 4 * 55 * 66 * 77;".to_string();
+            let input_path = "./samples/compiler/benchmark.crust";
 
-            // crust.run(&input);
+            crust.run_file(&input_path)
         });
     });
 }
