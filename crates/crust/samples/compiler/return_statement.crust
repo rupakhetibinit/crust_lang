@@ -1,7 +1,0 @@
-fn main(x: i64) -> f64 {
-    let x = 2;
-    let y = x * x;
-    let z = 1.3;
-    let a = 2.8;
-    return z / a;
-}

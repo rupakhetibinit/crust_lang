@@ -1,4 +1,4 @@
-Output ./demo/output/recursion.gif
+Output ./demo/output/benchmark.gif
 
 Set FontSize 25
 Set Width 1600
@@ -8,6 +8,6 @@ Set TypingSpeed 35ms
 Type "bat -P crates/crust/samples/compiler/recursion.crust"
 Enter
 Sleep 2s
-Type "cargo run --quiet -- run crates/crust/samples/compiler/recursion.crust"
+Type "target/release/crust.exe run crates/crust/samples/compiler/recursion.crust"
 Enter
-Sleep 6s
+Sleep 4s

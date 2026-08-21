@@ -27,6 +27,11 @@ pub enum TypedAstNode {
         value: TypedAstNodeId,
         return_type: Type,
     },
+    IfStatement {
+        condition: TypedAstNodeId,
+        then_block: TypedAstNodeId,
+        else_block: Option<TypedAstNodeId>,
+    },
     FunctionDefinition {
         name: String,
         parameters: Vec<TypedParameter>,
@@ -138,6 +143,7 @@ impl TypedAstNode {
             TypedAstNode::Literal { literal_type, .. } => Some(literal_type),
             TypedAstNode::LetStatement { declared_type, .. } => Some(declared_type),
             TypedAstNode::ReturnStatement { return_type, .. } => Some(return_type),
+            TypedAstNode::IfStatement { .. } => None,
             TypedAstNode::FunctionDefinition { function_type, .. } => Some(function_type),
             TypedAstNode::Identifier { resolved_type, .. } => Some(resolved_type),
             TypedAstNode::UnaryExpression { result_type, .. } => Some(result_type),

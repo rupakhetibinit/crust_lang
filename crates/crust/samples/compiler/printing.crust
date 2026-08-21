@@ -1,0 +1,5 @@
+fn main() -> void {
+    let language = "Crust";
+    let version = 1;
+    print("{} compiler demo {}", language, version);
+}

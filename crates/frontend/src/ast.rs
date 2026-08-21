@@ -15,6 +15,11 @@ pub enum UntypedAstNode {
     ReturnStatement {
         value: UntypedAstNodeId,
     },
+    IfStatement {
+        condition: UntypedAstNodeId,
+        then_block: UntypedAstNodeId,
+        else_block: Option<UntypedAstNodeId>,
+    },
     FunctionDefinition {
         name: String,
         parameters: Vec<Parameter>,
@@ -68,7 +73,9 @@ pub enum BinOp {
     And,
     NotEqual,
     Equal,
+    Lesser,
     LesserEqual,
+    Greater,
     GreaterEqual,
 }
 

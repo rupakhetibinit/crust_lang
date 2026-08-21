@@ -23,16 +23,25 @@ impl std::fmt::Display for Value {
 #[derive(Debug)]
 pub struct VirtualMachine {
     stack: Vec<Value>,
-    locals: Vec<Value>,
     pc: usize,
+    frames: Vec<Frame>,
+    current_base: usize,
+}
+
+#[derive(Debug)]
+struct Frame {
+    return_pc: usize,
+    caller_base: usize,
+    callee_base: usize,
 }
 
 impl VirtualMachine {
     pub fn new() -> Self {
         Self {
             stack: Vec::new(),
-            locals: Vec::new(),
             pc: 0,
+            frames: Vec::new(),
+            current_base: 0,
         }
     }
 
@@ -58,16 +67,17 @@ impl VirtualMachine {
                 self.stack.push(val);
             }
             OpCode::LoadLocal(idx) => {
-                let val = self.locals[*idx].clone();
+                let val = self.stack[self.current_base + *idx].clone();
                 self.stack.push(val);
             }
             OpCode::StoreLocal(idx) => {
                 let val = self.stack.pop().expect("stack underflow");
-                if *idx < self.locals.len() {
-                    self.locals[*idx] = val;
+                let slot = self.current_base + *idx;
+                if slot < self.stack.len() {
+                    self.stack[slot] = val;
                 } else {
-                    self.locals.resize(*idx + 1, Value::Int(0));
-                    self.locals[*idx] = val;
+                    self.stack.resize(slot + 1, Value::Int(0));
+                    self.stack[slot] = val;
                 }
             }
             OpCode::AddI64 => {
@@ -75,10 +85,30 @@ impl VirtualMachine {
                 let left = self.pop_int();
                 self.stack.push(Value::Int(left + right));
             }
+            OpCode::AddF64 => {
+                let right = self.pop_float();
+                let left = self.pop_float();
+                self.stack.push(Value::Float(left + right));
+            }
+            OpCode::SubI64 => {
+                let right = self.pop_int();
+                let left = self.pop_int();
+                self.stack.push(Value::Int(left - right));
+            }
+            OpCode::EqualI64 => self.compare_int(|left, right| left == right),
+            OpCode::LessI64 => self.compare_int(|left, right| left < right),
+            OpCode::LessEqualI64 => self.compare_int(|left, right| left <= right),
+            OpCode::GreaterI64 => self.compare_int(|left, right| left > right),
+            OpCode::GreaterEqualI64 => self.compare_int(|left, right| left >= right),
             OpCode::MulI64 => {
                 let right = self.pop_int();
                 let left = self.pop_int();
                 self.stack.push(Value::Int(left * right));
+            }
+            OpCode::MulF64 => {
+                let right = self.pop_float();
+                let left = self.pop_float();
+                self.stack.push(Value::Float(left * right));
             }
             OpCode::NegI64 => {
                 let val = self.pop_int();
@@ -86,14 +116,35 @@ impl VirtualMachine {
             }
             OpCode::Return => {
                 let val = self.stack.pop().expect("stack underflow");
-                println!("Program Returned {:?}", val);
+                if let Some(frame) = self.frames.pop() {
+                    self.stack.truncate(frame.callee_base);
+                    self.current_base = frame.caller_base;
+                    self.pc = frame.return_pc;
+                    self.stack.push(val);
+                } else {
+                    println!("Program Returned {:?}", val);
+                    self.pc = chunk.code.len();
+                }
             }
             OpCode::Halt => {
-                return;
+                self.pc = chunk.code.len();
             }
-            OpCode::Print => {
-                let val = self.stack.pop().expect("Stack underflow");
-                println!("{}", val);
+            OpCode::Print(argument_count) => {
+                let mut arguments = self.stack.split_off(
+                    self.stack
+                        .len()
+                        .checked_sub(*argument_count)
+                        .expect("stack underflow"),
+                );
+                let format = arguments
+                    .first()
+                    .expect("print requires at least one argument")
+                    .to_string();
+                let mut output = format;
+                for argument in arguments.drain(1..) {
+                    output = output.replacen("{}", &argument.to_string(), 1);
+                }
+                println!("{}", output);
             }
             OpCode::DivF64 => {
                 let left = self.pop_float();
@@ -105,7 +156,61 @@ impl VirtualMachine {
                 let left = self.pop_int();
                 self.stack.push(Value::Int(left / right));
             }
-            _ => panic!("Unsupported opcode: {:?}", op),
+            OpCode::IncrementLocal(idx) => {
+                let value = self.local_int(*idx);
+                self.store_local(*idx, Value::Int(value + 1));
+            }
+            OpCode::DecrementLocal(idx) => {
+                let value = self.local_int(*idx);
+                self.store_local(*idx, Value::Int(value - 1));
+            }
+            OpCode::JumpIfFalse(target) => {
+                if !self.pop_bool() {
+                    self.pc = *target;
+                }
+            }
+            OpCode::Jump(target) => self.pc = *target,
+            OpCode::Call(target, argument_count) => {
+                let callee_base = self
+                    .stack
+                    .len()
+                    .checked_sub(*argument_count)
+                    .expect("stack underflow");
+                self.frames.push(Frame {
+                    return_pc: self.pc,
+                    caller_base: self.current_base,
+                    callee_base,
+                });
+                self.current_base = callee_base;
+                self.pc = *target;
+            }
+        }
+    }
+
+    fn compare_int(&mut self, compare: impl FnOnce(i64, i64) -> bool) {
+        let right = self.pop_int();
+        let left = self.pop_int();
+        self.stack.push(Value::Bool(compare(left, right)));
+    }
+
+    fn local_int(&self, idx: usize) -> i64 {
+        match self
+            .stack
+            .get(self.current_base + idx)
+            .expect("invalid local slot")
+        {
+            Value::Int(value) => *value,
+            other => panic!("expected integer local, got {:?}", other),
+        }
+    }
+
+    fn store_local(&mut self, idx: usize, value: Value) {
+        let slot = self.current_base + idx;
+        if slot < self.stack.len() {
+            self.stack[slot] = value;
+        } else {
+            self.stack.resize(slot + 1, Value::Int(0));
+            self.stack[slot] = value;
         }
     }
 
@@ -123,6 +228,7 @@ impl VirtualMachine {
         }
     }
 
+    #[allow(unused)]
     fn pop_string(&mut self) -> String {
         match self.stack.pop().expect("stack underflow") {
             Value::String(i) => i,
@@ -135,5 +241,36 @@ impl VirtualMachine {
             Value::Bool(i) => i,
             other => panic!("expected float on stack, got {:?}", other),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Value, VirtualMachine};
+    use crate::{chunk::Chunk, codegen::OpCode};
+    use crust_frontend::ast::LiteralValue;
+
+    #[test]
+    fn executes_for_loop_bytecode() {
+        let mut chunk = Chunk::new();
+        let zero = chunk.add_constant(LiteralValue::Int(0));
+        let three = chunk.add_constant(LiteralValue::Int(3));
+        chunk.emit(OpCode::LoadConst(zero));
+        chunk.emit(OpCode::StoreLocal(0));
+        let condition = chunk.code.len();
+        chunk.emit(OpCode::LoadLocal(0));
+        chunk.emit(OpCode::LoadConst(three));
+        chunk.emit(OpCode::LessI64);
+        let exit = chunk.code.len();
+        chunk.emit(OpCode::JumpIfFalse(usize::MAX));
+        chunk.emit(OpCode::IncrementLocal(0));
+        chunk.emit(OpCode::Jump(condition));
+        chunk.patch_jump(exit, chunk.code.len());
+        chunk.emit(OpCode::Halt);
+
+        let mut vm = VirtualMachine::new();
+        vm.run(&chunk);
+
+        assert!(matches!(vm.stack[0], Value::Int(3)));
     }
 }

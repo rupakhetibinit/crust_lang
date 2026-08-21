@@ -56,6 +56,7 @@ impl<'p> Parser<'p> {
             Some(Token::Fn) => self.parse_fn_definition_inner(),
             Some(Token::Let) => self.parse_let_statement_inner(),
             Some(Token::Return) => self.parse_return_statement_inner(),
+            Some(Token::If) => self.parse_if_statement_inner(),
             Some(Token::LineComment(_)) => self.parse_comment(),
             Some(Token::For) => self.parse_for_loop_inner(),
             _ => self.parse_primary(),
@@ -143,6 +144,8 @@ impl<'p> Parser<'p> {
                             | Token::And
                             | Token::NotEqual
                             | Token::EqualEqual
+                            | Token::LeftAngleBracket
+                            | Token::RightAngleBracket
                             | Token::GreaterEqual
                             | Token::LesserEqual
                             | Token::BitAnd
@@ -213,6 +216,22 @@ impl<'p> Parser<'p> {
         Ok(self
             .arena
             .alloc(UntypedAstNode::ReturnStatement { value: expr }))
+    }
+
+    fn parse_if_statement_inner(&mut self) -> Result<usize, ParserError> {
+        self.expect_token(Token::If)?;
+        let condition = self.parse_expr_inner(0)?;
+        let then_block = self.parse_block_inner()?;
+        let else_block = if self.match_and_consume(Token::Else) {
+            Some(self.parse_block_inner()?)
+        } else {
+            None
+        };
+        Ok(self.arena.alloc(UntypedAstNode::IfStatement {
+            condition,
+            then_block,
+            else_block,
+        }))
     }
 
     fn parse_fn_definition_inner(&mut self) -> Result<usize, ParserError> {
@@ -400,6 +419,12 @@ impl<'p> Parser<'p> {
                 token: Token::Return,
                 ..
             }) => self.parse_return_statement_inner(),
+            Some(SpannedToken {
+                token: Token::For, ..
+            }) => self.parse_for_loop_inner(),
+            Some(SpannedToken {
+                token: Token::If, ..
+            }) => self.parse_if_statement_inner(),
             _ => self.parse_expr_inner(0),
         }
     }
@@ -463,8 +488,12 @@ impl<'p> Parser<'p> {
             Token::Minus => Some((10, BinOp::Sub)),
             Token::Star => Some((20, BinOp::Multiply)),
             Token::Slash => Some((20, BinOp::Divide)),
+            Token::LeftAngleBracket => Some((5, BinOp::Lesser)),
             Token::LesserEqual => Some((5, BinOp::LesserEqual)),
+            Token::RightAngleBracket => Some((5, BinOp::Greater)),
             Token::GreaterEqual => Some((5, BinOp::GreaterEqual)),
+            Token::EqualEqual => Some((5, BinOp::Equal)),
+            Token::NotEqual => Some((5, BinOp::NotEqual)),
             _ => None,
         }
     }
@@ -617,6 +646,18 @@ pub fn print_ast(root_id: UntypedAstNodeId, arena: &UntypedAstArena) {
             UntypedAstNode::ReturnStatement { value } => {
                 println!("{}ReturnStatement", indent_str);
                 print_node(*value, arena, indent + 2);
+            }
+            UntypedAstNode::IfStatement {
+                condition,
+                then_block,
+                else_block,
+            } => {
+                println!("{}IfStatement", indent_str);
+                print_node(*condition, arena, indent + 1);
+                print_node(*then_block, arena, indent + 1);
+                if let Some(else_block) = else_block {
+                    print_node(*else_block, arena, indent + 1);
+                }
             }
             UntypedAstNode::FunctionDefinition {
                 name,

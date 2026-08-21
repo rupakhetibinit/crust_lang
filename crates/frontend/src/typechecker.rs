@@ -258,7 +258,7 @@ impl TypeChecker {
                     return_type,
                 } = &symbol.symbol_type
                 {
-                    if arguments.len() != params.len() {
+                    if callee != "print" && arguments.len() != params.len() {
                         return Err(TypeError::ArityMismatch {
                             function: callee,
                             expected: params.len(),
@@ -271,7 +271,7 @@ impl TypeChecker {
                         let typed_arg = self.check_node(arg_id)?;
                         let arg_type = self.typed_arena.get(typed_arg).get_type().unwrap();
 
-                        if arg_type != &params[i] && params[i] != Type::Any {
+                        if callee != "print" && arg_type != &params[i] && params[i] != Type::Any {
                             return Err(TypeError::TypeMismatch {
                                 expected: params[i].clone(),
                                 found: arg_type.clone(),
@@ -312,6 +312,32 @@ impl TypeChecker {
                 TypedAstNode::ReturnStatement {
                     value: typed_value,
                     return_type: value_type,
+                }
+            }
+
+            UntypedAstNode::IfStatement {
+                condition,
+                then_block,
+                else_block,
+            } => {
+                let typed_condition = self.check_node(condition)?;
+                let condition_type = self
+                    .typed_arena
+                    .get(typed_condition)
+                    .get_type()
+                    .cloned()
+                    .unwrap();
+                if condition_type != Type::Bool {
+                    self.errors.push(TypeError::NonBooleanCondition {
+                        found: condition_type,
+                    });
+                }
+                let typed_then = self.check_node(then_block)?;
+                let typed_else = else_block.map(|id| self.check_node(id)).transpose()?;
+                TypedAstNode::IfStatement {
+                    condition: typed_condition,
+                    then_block: typed_then,
+                    else_block: typed_else,
                 }
             }
 
@@ -405,22 +431,42 @@ impl TypeChecker {
             // Comparison operations
             (
                 Type::I32,
-                BinOp::Equal | BinOp::NotEqual | BinOp::LesserEqual | BinOp::GreaterEqual,
+                BinOp::Equal
+                | BinOp::NotEqual
+                | BinOp::Lesser
+                | BinOp::LesserEqual
+                | BinOp::Greater
+                | BinOp::GreaterEqual,
                 Type::I32,
             ) => Ok(Type::Bool),
             (
                 Type::I64,
-                BinOp::Equal | BinOp::NotEqual | BinOp::LesserEqual | BinOp::GreaterEqual,
+                BinOp::Equal
+                | BinOp::NotEqual
+                | BinOp::Lesser
+                | BinOp::LesserEqual
+                | BinOp::Greater
+                | BinOp::GreaterEqual,
                 Type::I64,
             ) => Ok(Type::Bool),
             (
                 Type::F32,
-                BinOp::Equal | BinOp::NotEqual | BinOp::LesserEqual | BinOp::GreaterEqual,
+                BinOp::Equal
+                | BinOp::NotEqual
+                | BinOp::Lesser
+                | BinOp::LesserEqual
+                | BinOp::Greater
+                | BinOp::GreaterEqual,
                 Type::F32,
             ) => Ok(Type::Bool),
             (
                 Type::F64,
-                BinOp::Equal | BinOp::NotEqual | BinOp::LesserEqual | BinOp::GreaterEqual,
+                BinOp::Equal
+                | BinOp::NotEqual
+                | BinOp::Lesser
+                | BinOp::LesserEqual
+                | BinOp::Greater
+                | BinOp::GreaterEqual,
                 Type::F64,
             ) => Ok(Type::Bool),
             (Type::Bool, BinOp::Equal | BinOp::NotEqual, Type::Bool) => Ok(Type::Bool),

@@ -20,6 +20,12 @@ pub enum Token<'t> {
     #[token("fn")]
     Fn,
 
+    #[token("if")]
+    If,
+
+    #[token("else")]
+    Else,
+
     #[token("for")]
     For,
 
@@ -41,17 +47,17 @@ pub enum Token<'t> {
     #[token("return")]
     Return,
 
+    #[token("++", priority = 2)]
+    PlusPlus,
+
     #[token("+")]
     Plus,
 
-    #[token("++")]
-    PlusPlus,
+    #[token("--", priority = 2)]
+    MinusMinus,
 
     #[token("-")]
     Minus,
-
-    #[token("--")]
-    MinusMinus,
 
     #[token("*")]
     Star,
@@ -83,16 +89,16 @@ pub enum Token<'t> {
     #[token(">")]
     RightAngleBracket,
 
+    #[token("==", priority = 2)]
+    EqualEqual,
+
     #[token("=")]
     Equal,
 
-    #[token("==")]
-    EqualEqual,
-
-    #[token(">=")]
+    #[token(">=", priority = 2)]
     GreaterEqual,
 
-    #[token("<=")]
+    #[token("<=", priority = 2)]
     LesserEqual,
 
     #[token("&")]
@@ -119,7 +125,7 @@ pub enum Token<'t> {
     #[token("!")]
     Not,
 
-    #[token("!=")]
+    #[token("!=", priority = 2)]
     NotEqual,
 
     #[token(".")]
@@ -139,6 +145,8 @@ impl<'t> ToString for Token<'t> {
             Token::LParen => format!("("),
             Token::RParen => format!(")"),
             Token::Fn => format!("fn"),
+            Token::If => format!("if"),
+            Token::Else => format!("else"),
             Token::Float(f) => format!("{}", f),
             Token::Int(i) => format!("{}", i),
             Token::LBrace => format!("{{"),

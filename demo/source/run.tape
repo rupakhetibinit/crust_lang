@@ -1,4 +1,4 @@
-Output ./demo/output/disassemble.gif
+Output ./demo/output/run.gif
 
 Set FontSize 25
 Set Width 1600
@@ -8,6 +8,6 @@ Set TypingSpeed 35ms
 Type "bat -P crates/crust/samples/compiler/arithmetic.crust"
 Enter
 Sleep 2s
-Type "cargo run --quiet -- disassemble crates/crust/samples/compiler/arithmetic.crust"
+Type "cargo run --quiet -- run crates/crust/samples/compiler/arithmetic.crust"
 Enter
-Sleep 6s
+Sleep 5s

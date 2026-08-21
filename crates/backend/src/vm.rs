@@ -41,6 +41,7 @@ impl CrustVM {
                 for error in errors {
                     println!("  {:?}", error);
                 }
+                return Err(());
             }
         }
 
@@ -87,6 +88,7 @@ impl CrustVM {
                 for error in errors {
                     println!("  {:?}", error);
                 }
+                return Err(());
             }
         }
 
