@@ -1,5 +1,5 @@
 # Crust Programming Language
-A small typed language, bytecode compiler, and virtual machine written in Rust.
+A small typed language, bytecode compiler, and stack virtual machine written in Rust. Source goes through lexing, parsing, type checking, and bytecode code generation, then executes on a register-light stack VM with call frames.
 
 ## Current Features
 
@@ -11,6 +11,15 @@ A small typed language, bytecode compiler, and virtual machine written in Rust.
 - Variadic formatted printing with `{}` placeholders
 - Bytecode disassembly
 - Type-error diagnostics
+- Bytecode VM execution benchmarks
+
+## Architecture
+
+| Crate | Role |
+| --- | --- |
+| `crates/frontend` | Lexer, parser, AST, type checker, typed IR |
+| `crates/backend` | Bytecode chunk format, code generation, VM |
+| `crates/crust` | CLI (`run` / `disassemble`) and Criterion benches |
 
 ## Run The Compiler
 
@@ -45,6 +54,19 @@ All current samples are in `crates/crust/samples/compiler`:
 | `recursion.crust` | Recursive factorial and function calls |
 | `printing.crust` | Multiple formatted print arguments |
 | `type_error.crust` | Intentional type-checking failure |
+
+## Benchmarks
+
+Recursive Fibonacci(30), mean run time (hyperfine-style summary in `benchmarks/`):
+
+| Implementation | Mean | Min | Max | Relative |
+| --- | ---: | ---: | ---: | ---: |
+| Crust optimized VM | 159.3 ± 13.2 ms | 143.8 ms | 202.3 ms | 1.00 |
+| Python 3.14 | 254.0 ± 23.9 ms | 215.4 ms | 333.3 ms | 1.59× slower |
+
+Baseline before VM optimization (`benchmarks/recursion-results.md`): Crust release VM 406.8 ± 24.8 ms vs Python 3.14 250.6 ± 31.5 ms.
+
+The Python reference is [`benchmarks/recursion.py`](benchmarks/recursion.py). Result snapshots are in [`benchmarks/recursion-results.md`](benchmarks/recursion-results.md) and [`benchmarks/recursion-results-optimized.md`](benchmarks/recursion-results-optimized.md).
 
 ## VHS Demos
 
