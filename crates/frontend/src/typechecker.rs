@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ast::{BinOp, UnaryOp, UntypedAstArena, UntypedAstNode, UntypedAstNodeId},
-    typed::{Type, TypedAstNode, TypedAstNodeId, TypedParameter},
+    typed::{HostFnDecl, Type, TypedAstNode, TypedAstNodeId, TypedParameter},
     typed_arena::TypedAstArena,
 };
 
@@ -47,28 +47,44 @@ pub struct TypeChecker {
     untyped_arena: UntypedAstArena,
     typed_arena: TypedAstArena,
     scopes: Vec<HashMap<String, SymbolInfo>>,
+    host_decls: Vec<HostFnDecl>,
     current_function_return_type: Option<Type>,
     errors: Vec<TypeError>,
 }
 
 impl TypeChecker {
     pub fn new(untyped_arena: UntypedAstArena) -> Self {
+        Self::with_hosts(
+            untyped_arena,
+            vec![HostFnDecl {
+                name: "print".to_string(),
+                params: vec![Type::Any],
+                variadic: true,
+                return_type: Type::Void,
+            }],
+        )
+    }
+
+    pub fn with_hosts(untyped_arena: UntypedAstArena, hosts: Vec<HostFnDecl>) -> Self {
         let mut scopes = vec![HashMap::new()];
 
-        scopes[0].insert(
-            "print".to_string(),
-            SymbolInfo {
-                symbol_type: Type::Function {
-                    params: vec![Type::Any],
-                    return_type: Box::new(Type::Void),
+        for host in &hosts {
+            scopes[0].insert(
+                host.name.clone(),
+                SymbolInfo {
+                    symbol_type: Type::Function {
+                        params: host.params.clone(),
+                        return_type: Box::new(host.return_type.clone()),
+                    },
                 },
-            },
-        );
+            );
+        }
 
         Self {
             untyped_arena,
             typed_arena: TypedAstArena::default(),
             scopes,
+            host_decls: hosts,
             current_function_return_type: None,
             errors: Vec::new(),
         }
@@ -252,13 +268,18 @@ impl TypeChecker {
                 let symbol = self
                     .lookup_symbol(&callee)
                     .ok_or_else(|| TypeError::UndefinedFunction(callee.clone()))?;
+                let variadic = self
+                    .host_decls
+                    .iter()
+                    .find(|host| host.name == callee)
+                    .is_some_and(|host| host.variadic);
 
                 if let Type::Function {
                     params,
                     return_type,
                 } = &symbol.symbol_type
                 {
-                    if callee != "print" && arguments.len() != params.len() {
+                    if !variadic && arguments.len() != params.len() {
                         return Err(TypeError::ArityMismatch {
                             function: callee,
                             expected: params.len(),
@@ -271,7 +292,7 @@ impl TypeChecker {
                         let typed_arg = self.check_node(arg_id)?;
                         let arg_type = self.typed_arena.get(typed_arg).get_type().unwrap();
 
-                        if callee != "print" && arg_type != &params[i] && params[i] != Type::Any {
+                        if !variadic && arg_type != &params[i] && params[i] != Type::Any {
                             return Err(TypeError::TypeMismatch {
                                 expected: params[i].clone(),
                                 found: arg_type.clone(),

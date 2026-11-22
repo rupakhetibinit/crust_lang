@@ -71,12 +71,20 @@ pub struct TypedParameter {
     pub param_type: Type,
 }
 
+#[derive(Debug, Clone)]
+pub struct HostFnDecl {
+    pub name: String,
+    pub params: Vec<Type>,
+    pub variadic: bool,
+    pub return_type: Type,
+}
+
 impl From<String> for Type {
     fn from(value: String) -> Self {
         match &value.as_str() {
             &"i64" => Type::I64,
             &"i32" => Type::I32,
-            &"f64" => Type::I64,
+            &"f64" => Type::F64,
             &"string" => Type::String,
             &"f32" => Type::F32,
             &"void" => Type::Void,

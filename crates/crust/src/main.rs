@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use crust_backend::vm::CrustVM;
+use crust_backend::Engine;
 
 #[derive(Parser)]
 struct Cli {
@@ -15,15 +15,17 @@ enum Command {
 
 fn main() {
     let cli = Cli::parse();
+    let engine = Engine::new();
 
-    let bytecode_vm = CrustVM::new();
+    let result = match cli.command {
+        Command::Run { file_path } => engine.run_file(&file_path).map(|_| ()),
+        Command::Disassemble { file_path } => engine.disassemble_file(&file_path).map(|ir| {
+            print!("{ir}");
+        }),
+    };
 
-    match cli.command {
-        Command::Run { file_path } => {
-            _ = bytecode_vm.run_file(&file_path);
-        }
-        Command::Disassemble { file_path } => {
-            _ = bytecode_vm.disassemble(&file_path);
-        }
+    if let Err(error) = result {
+        eprintln!("{error}");
+        std::process::exit(1);
     }
 }

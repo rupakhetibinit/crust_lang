@@ -1,6 +1,9 @@
-pub mod chunk;
 pub mod codegen;
-pub mod internal;
-pub mod vm;
+pub mod engine;
+pub mod interpreter;
+pub mod ir;
+pub mod jit;
+pub mod runtime;
+pub mod value;
 
-pub use codegen::CodeGen;
+pub use engine::Engine;
