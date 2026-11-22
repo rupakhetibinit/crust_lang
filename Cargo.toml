@@ -10,3 +10,8 @@ license = "MIT"
 
 [workspace.dependencies]
 thiserror = "2.0.20"
+cranelift = "0.138.0"
+cranelift-codegen = "0.138.0"
+cranelift-jit = "0.138.0"
+cranelift-module = "0.138.0"
+cranelift-native = "0.138.0"

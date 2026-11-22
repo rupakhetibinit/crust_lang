@@ -1,14 +1,11 @@
 use criterion::{Criterion, criterion_group, criterion_main};
-use crust_backend::vm::CrustVM;
+use crust_backend::Engine;
+
 pub fn criterion_benchmark(c: &mut Criterion) {
-    c.bench_function("Crust Bytecode VM", |b| {
-        b.iter(|| {
-            let crust = CrustVM::new();
-
-            let input_path = "./samples/compiler/benchmark.crust";
-
-            crust.run_file(&input_path)
-        });
+    c.bench_function("Crust register VM", |b| {
+        let engine = Engine::new();
+        let input_path = "./samples/compiler/benchmark.crust";
+        b.iter(|| engine.run_file(input_path));
     });
 }
 
